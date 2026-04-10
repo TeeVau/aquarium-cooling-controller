@@ -1,0 +1,56 @@
+{
+  "project": {
+    "name": "aquarium_fan_characterization",
+    "description": "Automatischer Test zur Charakterisierung eines 4-Pin PWM Lüfters für ein Aquarium-Kühlsystem"
+  },
+  "hardware": {
+    "controller": "ESP32",
+    "fan": "120mm 4-pin PWM fan (e.g. Noctua NF-S12A)",
+    "sensors": [],
+    "power": "USB-C PD 12V"
+  },
+  "pinout": {
+    "fan_pwm": 18,
+    "fan_tach": 19
+  },
+  "test_procedure": {
+    "steps": [
+      "Detect start PWM",
+      "Measure curve increasing",
+      "Measure curve decreasing",
+      "Detect minimum hold PWM"
+    ],
+    "parameters": {
+      "pwm_step_start": 1,
+      "pwm_step_curve": 5,
+      "settle_time_ms": 3000,
+      "sample_time_ms": 1000,
+      "samples_per_point": 4,
+      "rpm_start_threshold": 150
+    }
+  },
+  "output": {
+    "formats": [
+      "serial log",
+      "table",
+      "c_array"
+    ],
+    "goal": "Create PWM-RPM characteristic curve"
+  },
+  "future_usage": {
+    "purpose": "fan plausibility check",
+    "logic": {
+      "type": "tolerance_based",
+      "tolerance_percent": 12,
+      "method": "linear interpolation"
+    }
+  },
+  "fail_safe": {
+    "definition": "Fan is faulty if RPM deviates from expected value based on PWM curve",
+    "rules": [
+      "only evaluate above minimum stable PWM",
+      "use tolerance band",
+      "require multiple consecutive mismatches"
+    ]
+  }
+}

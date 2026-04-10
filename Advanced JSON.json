@@ -1,0 +1,377 @@
+{
+  "project": {
+    "name": "aquarium-cooling-controller",
+    "type": "embedded-iot",
+    "language": "Arduino/C++",
+    "platform": "ESP32",
+    "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
+    "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
+    "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
+    "project_status": "test-and-characterization phase before production firmware"
+  },
+  "naming": {
+    "repository_name": "aquarium-cooling-controller",
+    "device_name": "aquarium-cooling-controller",
+    "hostname": "aq-cooling",
+    "mqtt_root_topic": "aquarium/cooling"
+  },
+  "system_context": {
+    "environment": "Covered aquarium with a dedicated fan opening in the lid and a separate air outlet opening",
+    "cooling_method": "Fan blows onto/through the aquarium opening to increase evaporation and remove warm air",
+    "priority_order": [
+      "Local autonomous thermal safety",
+      "Reliable fan actuation and monitoring",
+      "Low acoustic noise",
+      "MQTT integration and observability"
+    ],
+    "constraints": [
+      "System only cools, no heating",
+      "No local display or buttons are planned",
+      "MQTT may change target temperature",
+      "Target temperature must persist across reboot and across Wi-Fi/MQTT outages",
+      "Critical control must never depend on MQTT or Wi-Fi availability",
+      "Low audible noise is more important than maximum cooling performance"
+    ]
+  },
+  "hardware": {
+    "controller": {
+      "family": "ESP32",
+      "recommended_board": "Espressif ESP32-DevKitC V4",
+      "recommended_module": "ESP32-WROOM-32E",
+      "reason": [
+        "Sufficient GPIOs",
+        "Hardware PWM support",
+        "Interrupt-capable tach input",
+        "Good Arduino support",
+        "Enough resources for local control plus MQTT/Wi-Fi"
+      ]
+    },
+    "fan": {
+      "type": "120 mm 4-pin PWM PC fan",
+      "recommended_model": "Noctua NF-S12A PWM",
+      "voltage": "12V",
+      "signals": [
+        "GND",
+        "+12V",
+        "TACH",
+        "PWM"
+      ],
+      "tach_characteristic_assumption": "2 pulses per revolution",
+      "selection_rationale": [
+        "Low-noise operation",
+        "Suitable for airflow-focused use case",
+        "Good low-speed behavior expected",
+        "PWM and tachometer support"
+      ]
+    },
+    "temperature_sensors": {
+      "type": "DS18B20",
+      "count": 2,
+      "roles": [
+        "water_temperature",
+        "air_temperature"
+      ],
+      "wiring_model": "Shared 1-Wire bus",
+      "assignment_rule": "Sensors must be identified by ROM ID, not by bus order",
+      "reason": [
+        "Stable role assignment across reboot and hardware changes",
+        "Simple digital interface",
+        "Sufficient accuracy for aquarium cooling"
+      ]
+    },
+    "power": {
+      "source": "USB-C PD power supply",
+      "pd_trigger": "12V requested via USB-C PD trigger board",
+      "fan_supply": "Direct 12V from PD output",
+      "esp_supply": "Buck converter from 12V to 5V",
+      "goal": "Compact single-cable supply using an already available USB-C PD power supply"
+    },
+    "supporting_components": {
+      "onewire_pullup": "4.7k resistor to 3.3V",
+      "tach_pullup": "4.7k resistor to 3.3V",
+      "fan_pwm_driver_note": "Final hardware design must ensure PWM signal is electrically compatible with 4-pin fan control input",
+      "fan_tach_note": "Tach input must be handled as open-collector/open-drain style feedback"
+    }
+  },
+  "pinout": {
+    "fan_pwm": 18,
+    "fan_tach": 19,
+    "onewire_bus": 4,
+    "notes": [
+      "Common ground between ESP32 and fan power supply is mandatory",
+      "Tach input uses pull-up to 3.3V",
+      "1-Wire bus uses pull-up to 3.3V"
+    ]
+  },
+  "architecture": {
+    "control_partitioning": {
+      "critical_local_functions": [
+        "Read water temperature",
+        "Read air temperature",
+        "Load persisted configuration",
+        "Compute cooling command",
+        "Drive fan PWM",
+        "Measure fan RPM",
+        "Detect plausibility faults",
+        "Enter fault state if needed"
+      ],
+      "non_critical_functions": [
+        "Wi-Fi connection",
+        "MQTT publish/subscribe",
+        "Remote configuration",
+        "Diagnostics and telemetry"
+      ]
+    },
+    "operating_principle": {
+      "main_control_variable": "water_temperature",
+      "secondary_control_variable": "air_temperature",
+      "fan_command_logic": "final_pwm = max(water_based_pwm, air_based_min_pwm)",
+      "control_modes_planned": [
+        "auto",
+        "manual_override_optional",
+        "fault_mode"
+      ]
+    },
+    "persistence": {
+      "storage_backend": "ESP32 Preferences / NVS",
+      "must_persist": [
+        "target_temperature_c",
+        "air_assist_enabled",
+        "air_assist_min_pwm_percent",
+        "optional additional controller parameters"
+      ],
+      "boot_behavior": [
+        "Load persisted values at startup",
+        "Validate values",
+        "Fallback to defaults if invalid",
+        "Start local control immediately",
+        "Only then attempt Wi-Fi/MQTT connectivity"
+      ]
+    }
+  },
+  "control_strategy": {
+    "water_control": {
+      "purpose": "Primary cooling control",
+      "behavior": [
+        "Below target temperature: fan off or minimal support airflow",
+        "Slightly above target: low quiet cooling PWM",
+        "Further above target: gradually increase PWM",
+        "Critical temperature range: high PWM / emergency behavior"
+      ],
+      "note": "Final mapping will be tuned after fan characterization"
+    },
+    "air_assist": {
+      "purpose": "Remove hot air trapped under the lid due to the LED lighting",
+      "behavior": "Apply a minimum fan PWM when air temperature exceeds configured thresholds",
+      "priority": "Secondary to water cooling, but combined by max() logic"
+    },
+    "noise_priority": {
+      "policy": "Prefer quieter fan behavior over maximum cooling performance where safe",
+      "implication": [
+        "Need real fan characterization",
+        "Need conservative minimum running PWM",
+        "Need start boost handling if required"
+      ]
+    }
+  },
+  "fan_characterization_test": {
+    "purpose": "Characterize the specific physical fan before implementing the production controller",
+    "required_outputs": [
+      "Safe start PWM from standstill",
+      "Minimum hold PWM while already spinning",
+      "PWM-to-RPM curve increasing",
+      "PWM-to-RPM curve decreasing",
+      "Observations about acoustic behavior and unstable regions"
+    ],
+    "automation_goal": "The test sketch should run fully automatically with no manual serial commands required",
+    "test_sequence": [
+      "Ensure fan is stopped",
+      "Search safe start PWM from standstill in small PWM steps",
+      "Measure increasing curve from safe start PWM to 100%",
+      "Measure decreasing curve from 100% to 0%",
+      "Search minimum hold PWM while fan is already spinning",
+      "Print summary and machine-usable curve data"
+    ],
+    "test_parameters": {
+      "pwm_start_search_step_percent": 1,
+      "pwm_curve_step_percent": 5,
+      "settle_time_ms": 3000,
+      "rpm_sample_time_ms": 1000,
+      "samples_per_curve_point": 4,
+      "start_threshold_rpm_initial": 150,
+      "stable_samples_required": 3
+    },
+    "serial_output_requirements": [
+      "Human-readable progress log",
+      "Summary of start PWM and hold PWM",
+      "Curve as readable table",
+      "Curve as C array initializer for reuse in production code"
+    ],
+    "test_sketch_scope": [
+      "No MQTT required",
+      "No Wi-Fi required",
+      "Pure hardware characterization tool"
+    ]
+  },
+  "production_fault_model": {
+    "core_definition": "The fan is considered healthy only if measured RPM is plausible relative to commanded PWM, using the measured fan curve and a configured tolerance band",
+    "explicit_user_decision": "If measured RPM deviates outside the allowed tolerance from the expected RPM according to the fan curve, this is a fault",
+    "plausibility_method": {
+      "reference_data": "Measured PWM-to-RPM curve of the exact fan used in the system",
+      "calculation": "Linear interpolation between neighboring curve points",
+      "evaluation_rule": "Measured RPM must stay within expected RPM ± configured tolerance"
+    },
+    "tolerance_policy": {
+      "initial_strategy": "Use a fixed starting tolerance (example: ±12%) and refine after measurements",
+      "note": "Very low PWM region may need wider tolerance or exclusion from plausibility checking"
+    },
+    "enable_conditions": [
+      "Only evaluate plausibility above the minimum stable operating PWM",
+      "Pause plausibility evaluation for a settling period after PWM changes",
+      "Use multiple consecutive mismatches before latching a fault"
+    ],
+    "fault_confirmation": {
+      "mismatch_cycles_required_initial": 3,
+      "match_cycles_required_for_recovery_initial": 3
+    },
+    "desired_diagnostics": [
+      "expected_rpm",
+      "measured_rpm",
+      "rpm_error_absolute",
+      "rpm_error_percent",
+      "fan_plausible",
+      "fan_fault"
+    ]
+  },
+  "fail_safe": {
+    "philosophy": "Local fail-safe behavior must protect cooling autonomy and surface real hardware faults",
+    "water_sensor_failure": {
+      "policy": "Enter fault handling because primary control variable is unavailable",
+      "initial_recommendation": "Drive fan to a defined safe fallback PWM and raise an alarm"
+    },
+    "air_sensor_failure": {
+      "policy": "Continue water-based cooling control, disable or ignore air-assist logic, raise diagnostic flag"
+    },
+    "fan_plausibility_failure": {
+      "policy": "Treat as fan fault",
+      "user_rule": "Any confirmed RPM deviation outside the allowed tolerance band is a fault",
+      "reaction_to_be_finalized": "At minimum publish/record error; final production reaction still to be decided explicitly"
+    },
+    "wifi_mqtt_failure": {
+      "policy": "No impact on local cooling control; last persisted settings remain active"
+    }
+  },
+  "mqtt": {
+    "design_status": "Planned for production firmware, not needed for fan characterization test sketch",
+    "functional_requirements": {
+      "publish": [
+        "water temperature",
+        "air temperature",
+        "fan RPM",
+        "fan PWM",
+        "target temperature",
+        "controller mode",
+        "fault status",
+        "diagnostic values"
+      ],
+      "subscribe": [
+        "set target temperature",
+        "optional control flags",
+        "optional manual override for service/testing"
+      ]
+    },
+    "topic_structure_proposal": {
+      "state": [
+        "aquarium/cooling/state/water_temp_c",
+        "aquarium/cooling/state/air_temp_c",
+        "aquarium/cooling/state/fan_pwm_percent",
+        "aquarium/cooling/state/fan_rpm",
+        "aquarium/cooling/state/target_temp_c",
+        "aquarium/cooling/state/controller_mode"
+      ],
+      "status": [
+        "aquarium/cooling/status/fan_plausible",
+        "aquarium/cooling/status/fan_fault",
+        "aquarium/cooling/status/water_sensor_ok",
+        "aquarium/cooling/status/air_sensor_ok",
+        "aquarium/cooling/status/alarm_code"
+      ],
+      "set": [
+        "aquarium/cooling/set/target_temp_c",
+        "aquarium/cooling/set/air_assist_enable",
+        "aquarium/cooling/set/air_min_pwm_percent"
+      ]
+    },
+    "critical_rule": "MQTT must never be required for the controller to keep cooling autonomously"
+  },
+  "software_requirements": {
+    "framework": "Arduino",
+    "style": [
+      "Readable, production-oriented C++",
+      "Separate critical control logic from communication logic",
+      "Use structs or small helper modules where useful",
+      "Avoid unnecessary dynamic allocation"
+    ],
+    "libraries_expected": [
+      "Arduino core for ESP32",
+      "Preferences",
+      "OneWire",
+      "DallasTemperature",
+      "WiFi",
+      "PubSubClient or equivalent MQTT library"
+    ],
+    "production_code_principles": [
+      "Deterministic local control loop",
+      "Graceful operation without network",
+      "Explicit validation of remote parameters before persisting",
+      "Clear fault-state handling"
+    ]
+  },
+  "codex_tasking": {
+    "current_task": "Use the automatic fan characterization sketch as the active work artifact",
+    "next_expected_tasks": [
+      "Refine and improve the fan test sketch if needed",
+      "Parse and organize measured curve results",
+      "Generate production-ready fan curve structures",
+      "Implement interpolation helper for expected RPM",
+      "Implement plausibility checker with tolerance and debounce",
+      "Build production firmware for aquarium cooling controller"
+    ],
+    "instructions_for_codex": [
+      "Preserve the architectural rule that critical temperature control runs locally on the ESP32",
+      "Do not make MQTT or Wi-Fi a dependency for autonomous cooling",
+      "Treat the measured fan curve as the reference for plausibility checking",
+      "Implement fault detection conservatively with settling time and repeated mismatches",
+      "Prefer maintainable code over overly clever code"
+    ]
+  },
+  "acceptance_criteria": {
+    "fan_characterization_phase": [
+      "Automatic test sketch compiles on ESP32 Arduino",
+      "Sketch runs without manual serial commands",
+      "Sketch reports safe start PWM",
+      "Sketch reports minimum hold PWM",
+      "Sketch prints increasing and decreasing PWM-to-RPM curves",
+      "Sketch prints data reusable in production firmware"
+    ],
+    "production_phase_high_level": [
+      "Controller continues cooling without network",
+      "Target temperature survives reboot",
+      "Fan plausibility fault is detected using curve + tolerance",
+      "MQTT can observe and set non-critical parameters without compromising autonomy"
+    ]
+  },
+  "known_open_points": [
+    "Exact final tolerance percentage must be tuned after measurements",
+    "Exact final reaction to confirmed fan fault still needs explicit definition",
+    "Final hardware-level PWM electrical interface to the selected fan must be validated in the built prototype",
+    "Curve should be verified once in free-air test and once in real installation if behavior changes significantly"
+  ],
+  "non_goals_for_now": [
+    "Heating control",
+    "Local display UI",
+    "Local button input",
+    "Complex cloud integration",
+    "Using MQTT during fan characterization testing"
+  ]
+}
