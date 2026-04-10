@@ -1,0 +1,18 @@
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+
+# Build artifacts
+build/
+dist/
+.pio/
+*.bin
+*.elf
+*.map
+*.hex
+
+# Logs / temp
+*.log
+*.tmp

@@ -1,0 +1,64 @@
+flowchart LR
+  PSU["USB-C PD Power Supply"]
+
+  subgraph "Aquarium Installation"
+    subgraph "Rear Upper Mounting Position"
+      ENC["3D-Printed Electronics Enclosure<br/>mounted above aquarium frame<br/>rear side near lighting"]
+
+      subgraph "Inside Enclosure"
+        PD["USB-C PD Trigger Board<br/>requests 12 V"]
+        V12["+12 V Rail"]
+        PSU5["5 V PSU / Buck Converter<br/>12 V -> 5 V"]
+        GND["Common GND"]
+        ESP["ESP32-DevKitC V4<br/>ESP32-WROOM-32E"]
+        V33["3.3 V"]
+        PULL1["4.7k Pull-up<br/>1-Wire to 3.3 V"]
+        PULL2["4.7k Pull-up<br/>TACH to 3.3 V"]
+        PWMIF["PWM Interface Stage<br/>TBD / validate with 4-pin fan"]
+
+        TERMF["Terminal Block<br/>Fan"]
+        TERMSW["Terminal Block<br/>Water Sensor"]
+        TERMSA["Terminal Block<br/>Air Sensor"]
+
+        GPIO18["GPIO18<br/>Fan PWM"]
+        GPIO19["GPIO19<br/>Fan TACH"]
+        GPIO4["GPIO4<br/>1-Wire Bus"]
+      end
+    end
+
+    FAN["120 mm 4-pin PWM Fan"]
+    DSW["DS18B20<br/>Water Temperature"]
+    DSA["DS18B20<br/>Air Temperature"]
+    LIGHT["Aquarium Lighting Area"]
+  end
+
+  PSU --> PD
+  PD --> V12
+  V12 --> PSU5
+  V12 --> TERMF
+  PSU5 --> ESP
+
+  ESP --> V33
+  V33 --> PULL1
+  V33 --> PULL2
+
+  GPIO4 --- PULL1
+  GPIO4 --- TERMSW
+  GPIO4 --- TERMSA
+
+  GPIO18 --> PWMIF
+  PWMIF --> TERMF
+
+  TERMF --> FAN
+  TERMSW --> DSW
+  TERMSA --> DSA
+
+  FAN --> GPIO19
+  GPIO19 --- PULL2
+
+  GND --- ESP
+  GND --- TERMF
+  GND --- TERMSW
+  GND --- TERMSA
+
+  LIGHT --- ENC

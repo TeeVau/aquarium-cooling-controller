@@ -17,7 +17,9 @@ This raises water temperature and requires controlled airflow that is quiet,
 reliable, and autonomous even when the network is unavailable. Before the
 production controller is finalized, the specific fan must be characterized so
 that the firmware can use a measured PWM-to-RPM curve for low-noise operation
-and plausibility-based fault detection.
+and plausibility-based fault detection. The electronics shall be centralized in
+a compact enclosure mounted near the aquarium lid and lighting area so that fan
+and sensor cabling can remain short and serviceable.
 
 ### Users / Stakeholders
 
@@ -36,6 +38,8 @@ and plausibility-based fault detection.
   dependent on MQTT or Wi-Fi.
 - Support OTA firmware updates via the ESP32 WLAN client without compromising
   autonomous cooling behavior.
+- Centralize the electronics in a 3D-printed enclosure with short cable runs to
+  fan and sensors.
 
 ### Non-Goals
 
@@ -106,9 +110,23 @@ Runtime interactions:
 | Water sensor | DS18B20 | Primary control variable |
 | Air sensor | DS18B20 | Secondary air-assist trigger |
 | Power input | USB-C PD trigger requesting 12 V | Single-cable power source |
-| ESP32 supply | Buck converter from 12 V to 5 V | Controller supply |
+| 5 V PSU | Switched-mode 12 V to 5 V supply / buck converter | Controller supply |
 | 1-Wire pull-up | 4.7 kOhm to 3.3 V | Bus biasing |
 | Tach pull-up | 4.7 kOhm to 3.3 V | Open-collector tach input biasing |
+| Enclosure | 3D-printed housing | Central mechanical integration and mounting |
+| Terminal blocks | Fan, water sensor, air sensor connectors | Field wiring termination |
+
+Mechanical and packaging concept:
+
+- The electronics shall be housed centrally in one 3D-printed enclosure.
+- The enclosure shall contain the USB-C PD board, the 5 V PSU, the ESP32, and
+  terminal connections for fan, water sensor, and air sensor wiring.
+- The enclosure shall be mounted above the aquarium frame, preferably on the
+  rear side near the lighting position.
+- The selected mounting position shall minimize cable length to the fan and both
+  sensors while keeping the assembly serviceable.
+- Cable entry, strain relief, and splash exposure shall be considered in the
+  final enclosure design.
 
 Pin assignment:
 
@@ -125,6 +143,10 @@ Hardware constraints:
 - The final PWM output stage must be electrically compatible with 4-pin PC fan
   PWM input requirements.
 - The tach signal shall be treated as open-collector/open-drain style feedback.
+- The enclosure shall provide sufficient space and mounting features for the
+  USB-C PD board, 5 V PSU, ESP32, and terminal blocks.
+- Field wiring for fan and both sensors shall terminate at the central
+  enclosure rather than directly on loose controller wiring.
 
 ### 2.3 Software Architecture
 
@@ -308,6 +330,13 @@ Dependencies:
   at boot, validate it, and apply defaults if stored values are invalid.
 - FR-2.11 [Must]: The production controller shall continue local cooling
   operation when Wi-Fi or MQTT is unavailable.
+- FR-2.12 [Must]: The system hardware shall be integrated into a central
+  3D-printed enclosure containing the USB-C PD board, 5 V PSU, ESP32, and
+  terminal blocks for fan, water sensor, and air sensor connections.
+- FR-2.13 [Must]: The enclosure shall be mountable above the aquarium frame,
+  preferably on the rear side near the lighting area, to minimize cable length.
+- FR-2.14 [Should]: The enclosure design should support orderly cable routing,
+  basic strain relief, and service access for wiring and maintenance.
 
 #### Phase 2 - Fault Handling
 
@@ -386,6 +415,8 @@ Dependencies:
   finalized.
 - Low-PWM regions may require wider tolerance or exclusion from plausibility
   checking.
+- The final enclosure design must tolerate the installation position near warm,
+  humid aquarium lighting surroundings.
 
 ## 5. Risks, Assumptions & Dependencies
 
@@ -398,6 +429,7 @@ Dependencies:
 | Under-lid airflow differs from free-air characterization | Medium | Medium | Verify curve once in free air and again in installed configuration |
 | DS18B20 bus or role mapping errors swap water and air sensors | Low | High | Assign roles by ROM ID and verify mapping at commissioning |
 | Fault reaction for confirmed fan fault remains underspecified | Medium | High | Finalize explicit reaction before production release |
+| Enclosure placement near the aquarium lid increases heat, humidity, or splash exposure | Medium | High | Use protected mounting position, cable management, and enclosure design with environmental margin |
 
 ### Assumptions
 
@@ -428,6 +460,10 @@ Dependencies:
 - Covered aquarium environment with moisture and heat near the lid
 - Single-cable compact power delivery preferred
 - Low audible noise prioritized over maximum airflow
+- The enclosure mounting position is above the aquarium frame, preferably on the
+  rear side near the lighting assembly
+- Cable runs to fan and both DS18B20 sensors should be kept as short as
+  practical
 
 ## 6. Interface Specifications
 
@@ -527,11 +563,17 @@ automatic with no runtime command input.
 1. Assemble the ESP32, fan power path, tach pull-up, PWM interface, and 1-Wire
    bus.
 2. Verify common ground between the fan supply and ESP32.
-3. Flash the characterization sketch for first article testing.
-4. Record the measured fan curve and minimum stable PWM data.
-5. Integrate measured values into production firmware.
-6. Flash production firmware after control and fault parameters are finalized.
-7. Configure the OTA endpoint and verify the OTA path after Wi-Fi integration is
+3. Install the USB-C PD board, 5 V PSU, ESP32, and terminal blocks into the
+   3D-printed enclosure.
+4. Mount the enclosure above the aquarium frame, preferably at the rear near the
+   lighting area.
+5. Route and terminate fan, water-sensor, and air-sensor cables at the
+   enclosure.
+6. Flash the characterization sketch for first article testing.
+7. Record the measured fan curve and minimum stable PWM data.
+8. Integrate measured values into production firmware.
+9. Flash production firmware after control and fault parameters are finalized.
+10. Configure the OTA endpoint and verify the OTA path after Wi-Fi integration is
    available.
 
 ### Provisioning / Configuration
@@ -543,6 +585,8 @@ automatic with no runtime command input.
    active.
 5. Configure OTA endpoint, update policy, and any required credentials before
    enabling OTA in production.
+6. Verify terminal labeling and cable assignment for fan, water sensor, and air
+   sensor during commissioning.
 
 ### Normal Operation
 
@@ -564,6 +608,8 @@ automatic with no runtime command input.
 4. Verify sensor ROM-ID assignment after replacing a DS18B20 sensor.
 5. Trigger and verify OTA updates only when the system is in a stable operating
    condition and the update source is trusted.
+6. Inspect enclosure mounting, cable strain relief, and terminal tightness
+   during maintenance intervals.
 
 ### Recovery Procedures
 
@@ -585,7 +631,7 @@ automatic with no runtime command input.
 
 | Test ID | Feature | Procedure | Success Criteria |
 |---|---|---|---|
-| TC-P1-01 | Standalone characterization | Flash `fan-test.ino` and boot with connected fan | Sketch starts without requiring serial input |
+| TC-P1-01 | Standalone characterization | Flash `firmware/fan-test/fan-test.ino` and boot with connected fan | Sketch starts without requiring serial input |
 | TC-P1-02 | Start PWM detection | Observe automatic search from stop to running state | Safe start PWM is reported |
 | TC-P1-03 | Increasing curve | Run full upward sweep from detected start PWM | PWM/RPM points are printed up to 100% |
 | TC-P1-04 | Decreasing curve | Run full downward sweep from 100% to 0% | PWM/RPM points are printed down to 0% |
@@ -610,6 +656,8 @@ automatic with no runtime command input.
 | TC-P2-12 | Control/communication separation | Review module boundaries and disable network stack during runtime tests | Local control remains operational with communication logic absent or inactive |
 | TC-P2-13 | Boot sequencing | Boot with valid persisted config and delayed/unavailable network | Local control becomes valid before network initialization is required |
 | TC-P2-14 | OTA non-blocking startup | Boot with OTA enabled and reachable or unreachable OTA endpoint | Local cooling starts before OTA activity begins |
+| TC-P2-15 | Enclosure integration | Install USB-C PD board, 5 V PSU, ESP32, and terminal blocks into the printed enclosure | All required hardware fits and remains mechanically serviceable |
+| TC-P2-16 | Mounting and cable routing | Mount the enclosure above the aquarium frame near the lighting area and route all field wiring | Fan and sensor cable runs are short, orderly, and terminate correctly at the enclosure |
 
 ### 8.3 Acceptance Tests
 
@@ -622,6 +670,7 @@ automatic with no runtime command input.
 | AT-05 | Installed fan plausibility | Run controller in actual aquarium installation | Fan plausibility behaves correctly in the real airflow path |
 | AT-06 | OTA success path | Offer a newer valid firmware image via Wi-Fi OTA endpoint | Firmware downloads, validates, activates, and reports success |
 | AT-07 | OTA failure rollback | Interrupt or invalidate OTA image during update test | Device preserves current working firmware and reports failure |
+| AT-08 | Installed enclosure concept | Install the full system in the intended rear upper mounting position | Electronics are centralized, accessible, and cable routing is practical |
 
 ### 8.4 Traceability Matrix
 
@@ -644,6 +693,9 @@ automatic with no runtime command input.
 | FR-2.9 | Must | TC-P2-05, AT-02 | Covered |
 | FR-2.10 | Must | TC-P2-05 | Covered |
 | FR-2.11 | Must | AT-01, AT-02 | Covered |
+| FR-2.12 | Must | TC-P2-15, AT-08 | Covered |
+| FR-2.13 | Must | TC-P2-16, AT-08 | Covered |
+| FR-2.14 | Should | TC-P2-15, TC-P2-16, AT-08 | Covered |
 | FR-3.1 | Must | TC-P2-07, AT-05 | Covered |
 | FR-3.2 | Must | TC-P2-07, AT-05 | Covered |
 | FR-3.3 | Must | TC-P2-07 | Covered |
@@ -683,6 +735,8 @@ automatic with no runtime command input.
 | MQTT updates seem ignored | Network unavailable or payload invalid | Check broker connection and validation logs | Restore connectivity or send valid payload |
 | OTA update does not start | OTA endpoint unreachable or update policy not satisfied | Check Wi-Fi state, OTA endpoint, and OTA diagnostics | Restore connectivity or correct OTA configuration |
 | OTA update fails validation | Corrupt image, metadata mismatch, or unsupported image | Inspect OTA result code and firmware metadata | Rebuild or republish a valid firmware image |
+| Cable routing is awkward or too long | Enclosure position or terminal layout is poorly chosen | Inspect mounted enclosure position and wiring paths | Move enclosure or revise terminal placement in the printed design |
+| Moisture or heat exposure threatens electronics | Mounting location too close to splash or trapped warm air | Inspect rear upper mounting environment during operation | Add shielding, revise enclosure geometry, or adjust placement |
 
 ## 10. Appendix
 
@@ -710,7 +764,17 @@ automatic with no runtime command input.
 | Hostname | `aq-cooling` |
 | MQTT root topic | `aquarium/cooling` |
 
-### C. Open Points Requiring Finalization
+### C. Mechanical Integration Summary
+
+| Item | Requirement |
+|---|---|
+| Enclosure type | 3D-printed central electronics housing |
+| Internal contents | USB-C PD board, 5 V PSU, ESP32, field terminal blocks |
+| External terminations | Fan, water sensor, air sensor |
+| Preferred mounting position | Above aquarium frame, rear side, near lighting |
+| Design intent | Short cable runs, centralized electronics, serviceable installation |
+
+### D. Open Points Requiring Finalization
 
 - Final plausibility tolerance percentage after measured tuning
 - Final reaction to confirmed fan fault in production mode
@@ -718,3 +782,12 @@ automatic with no runtime command input.
 - Whether manual override remains enabled in production firmware
 - Whether installed airflow requires a separate in-situ fan curve
 - Exact OTA manifest format, approval policy, and authentication details
+- Exact enclosure geometry, mounting method, and splash-protection details
+
+### E. Draft Schematic Sketch
+
+- Mermaid source: `docs/design/schematic-sketch.mmd`
+- Usage: paste the Mermaid source into draw.io via `Arrange -> Insert ->
+  Advanced -> Mermaid`
+- Scope: block-level sketch for architecture and wiring orientation, not yet a
+  final electrical schematic
