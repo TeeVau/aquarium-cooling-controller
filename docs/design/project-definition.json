@@ -94,8 +94,8 @@
     }
   },
   "pinout": {
-    "fan_pwm": 18,
-    "fan_tach": 19,
+    "fan_pwm": 25,
+    "fan_tach": 26,
     "onewire_bus": 4,
     "notes": [
       "Common ground between ESP32 and fan power supply is mandatory",
@@ -211,7 +211,17 @@
       "No MQTT required",
       "No Wi-Fi required",
       "Pure hardware characterization tool"
-    ]
+    ],
+    "latest_verified_result": {
+      "date": "2026-04-12",
+      "fan_model": "Noctua NF-S12A PWM",
+      "tach_pullup_ohm": 3300,
+      "safe_start_pwm_percent": 12,
+      "minimum_hold_pwm_percent": 10,
+      "rpm_at_zero_percent": 0,
+      "rpm_at_five_percent": 0,
+      "rpm_at_full_scale": 1252
+    }
   },
   "production_fault_model": {
     "core_definition": "The fan is considered healthy only if measured RPM is plausible relative to commanded PWM, using the measured fan curve and a configured tolerance band",

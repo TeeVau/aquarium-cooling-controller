@@ -17,6 +17,8 @@ The current repo already includes:
 - project definition and design notes
 - a Mermaid-based block schematic sketch for draw.io
 - an ESP32 Arduino fan-characterization sketch
+- captured serial logs from the first successful fan test runs
+- a PowerShell helper for serial log capture
 
 ## Current Status
 
@@ -37,14 +39,20 @@ Current focus:
 |- .gitignore
 |- docs/
 |  |- aquarium-cooling-controller-fsd.md
+|  |- result fan test/
+|  |  |- measurement-summary-2026-04-12.md
+|  |  |- live-run.txt
+|  |  `- live-run-part2.txt
 |  `- design/
 |     |- project-definition.json
 |     |- fan-characterization-brief.json
 |     |- schematic-sketch.md
 |     `- schematic-sketch.mmd
-`- firmware/
-   `- fan-test/
-      `- fan-test.ino
+|- firmware/
+|  `- fan-test/
+|     `- fan-test.ino
+`- tools/
+   `- serial-capture.ps1
 ```
 
 ## Documentation
@@ -54,6 +62,7 @@ Current focus:
 - Characterization brief: [`docs/design/fan-characterization-brief.json`](docs/design/fan-characterization-brief.json)
 - Schematic sketch notes: [`docs/design/schematic-sketch.md`](docs/design/schematic-sketch.md)
 - Mermaid source for draw.io: [`docs/design/schematic-sketch.mmd`](docs/design/schematic-sketch.mmd)
+- Measurement summary: [`docs/result fan test/measurement-summary-2026-04-12.md`](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
 
 ## Hardware Concept
 
@@ -75,6 +84,32 @@ Key design intent:
 - reliable local control independent of Wi-Fi/MQTT
 - quiet fan operation based on measured fan behavior
 
+## Current Pin Mapping
+
+ESP32 pin usage in the current fan-characterization setup:
+
+| Function | ESP32 GPIO | Notes |
+|---|---:|---|
+| Fan PWM | 25 | PWM output for 4-pin fan control |
+| Fan TACH | 26 | Tachometer input with 3.3 kOhm pull-up to 3.3 V |
+| 1-Wire bus | 4 | Shared DS18B20 bus for water and air sensors |
+
+Standard 4-pin PWM fan connector pinout:
+
+| Fan Pin | Signal | Typical Color | Connection in this project |
+|---|---|---|---|
+| 1 | GND | Black | Common GND |
+| 2 | +12 V | Yellow | 12 V fan supply |
+| 3 | TACH | Green | ESP32 GPIO26 via tach input |
+| 4 | PWM | Blue | ESP32 GPIO25 via PWM interface stage |
+
+Verified test setup notes:
+
+- Noctua NF-S12A PWM
+- tach pull-up: `3.3 kOhm` to `3.3 V`
+- common GND between ESP32, fan, and 12 V supply is mandatory
+- no pull-up on the PWM line
+
 ## Firmware Scope
 
 ### Characterization Sketch
@@ -90,6 +125,21 @@ It is used to:
 - measure the downward PWM-to-RPM curve
 - detect minimum hold PWM
 - print reusable curve data for the production controller
+
+### Latest Measured Results
+
+Confirmed on the current bench setup with the Noctua NF-S12A PWM:
+
+- start PWM from standstill: `12%`
+- minimum hold PWM while spinning: `10%`
+- `0%` and `5%` PWM: `0 RPM`
+- measured maximum at `100%`: `1252 RPM`
+
+Latest captured artifacts:
+
+- [`docs/result fan test/measurement-summary-2026-04-12.md`](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
+- [`docs/result fan test/live-run.txt`](docs/result%20fan%20test/live-run.txt)
+- [`docs/result fan test/live-run-part2.txt`](docs/result%20fan%20test/live-run-part2.txt)
 
 ### Planned Production Firmware
 
@@ -113,9 +163,9 @@ The block schematic can be edited in draw.io:
 
 ## Suggested Next Steps
 
-1. Validate the fan PWM electrical interface with the selected fan.
-2. Run and document the first fan-characterization measurements.
-3. Convert measured fan data into a production-ready fan-curve table.
+1. Convert the measured fan data into a production-ready fan-curve table and interpolation helper.
+2. Define the first plausibility window above the stable operating region.
+3. Validate the final PWM electrical interface for the production hardware design.
 4. Implement the first production firmware modules around sensors, control, and
    plausibility checking.
 5. Refine the enclosure geometry and terminal layout for the real installation.

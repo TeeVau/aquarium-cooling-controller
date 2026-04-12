@@ -1,0 +1,444 @@
+Ohne Pullup an TACH
+
+Fan Auto Test startet...
+
+=== Start PWM suchen ===
+  PWM 0% -> 480
+  PWM 0% -> 450
+  PWM 0% -> 450
+Start PWM: 0
+
+=== Kennlinie aufwärts ===
+PWM 0
+  Sample 1: 450
+  Sample 2: 450
+  Sample 3: 480
+  Sample 4: 510
+ -> 472
+PWM 5
+  Sample 1: 29524
+  Sample 2: 29554
+  Sample 3: 29374
+  Sample 4: 29524
+ -> 29494
+PWM 10
+  Sample 1: 29734
+  Sample 2: 29614
+  Sample 3: 29644
+  Sample 4: 29794
+ -> 29696
+PWM 15
+  Sample 1: 29914
+  Sample 2: 29734
+  Sample 3: 29674
+  Sample 4: 29764
+ -> 29771
+PWM 20
+  Sample 1: 29824
+  Sample 2: 29644
+  Sample 3: 29704
+  Sample 4: 29824
+ -> 29749
+PWM 25
+  Sample 1: 29704
+  Sample 2: 29794
+  Sample 3: 29734
+  Sample 4: 29914
+ -> 29786
+PWM 30
+  Sample 1: 29884
+  Sample 2: 29854
+  Sample 3: 29914
+  Sample 4: 29704
+ -> 29839
+PWM 35
+  Sample 1: 29974
+  Sample 2: 29614
+  Sample 3: 29884
+  Sample 4: 29824
+ -> 29824
+PWM 40
+  Sample 1: 29944
+  Sample 2: 29884
+  Sample 3: 29794
+  Sample 4: 29794
+ -> 29854
+PWM 45
+  Sample 1: 29914
+  Sample 2: 29884
+  Sample 3: 29944
+  Sample 4: 29914
+ -> 29914
+PWM 50
+  Sample 1: 30004
+  Sample 2: 30004
+  Sample 3: 29914
+  Sample 4: 29974
+ -> 29974
+PWM 55
+  Sample 1: 30064
+  Sample 2: 29884
+  Sample 3: 29854
+  Sample 4: 30064
+ -> 29966
+PWM 60
+  Sample 1: 30004
+  Sample 2: 29884
+  Sample 3: 29914
+  Sample 4: 30004
+ -> 29951
+PWM 65
+  Sample 1: 30004
+  Sample 2: 30034
+  Sample 3: 29854
+  Sample 4: 30034
+ -> 29981
+PWM 70
+  Sample 1: 30004
+  Sample 2: 30004
+  Sample 3: 30034
+  Sample 4: 30064
+ -> 30026
+PWM 75
+  Sample 1: 30004
+  Sample 2: 30214
+  Sample 3: 30124
+  Sample 4: 29974
+ -> 30079
+PWM 80
+  Sample 1: 30274
+  Sample 2: 30124
+  Sample 3: 30064
+  Sample 4: 30094
+ -> 30139
+PWM 85
+  Sample 1: 30214
+  Sample 2: 30094
+  Sample 3: 30154
+  Sample 4: 30214
+ -> 30169
+PWM 90
+  Sample 1: 30184
+  Sample 2: 30154
+  Sample 3: 30094
+  Sample 4: 30124
+ -> 30139
+PWM 95
+  Sample 1: 30484
+  Sample 2: 30364
+  Sample 3: 30364
+  Sample 4: 30394
+ -> 30401
+PWM 100
+  Sample 1: 1710
+  Sample 2: 1620
+  Sample 3: 1710
+  Sample 4: 1650
+ -> 1672
+
+=== Kennlinie abwärts ===
+PWM 100
+  Sample 1: 1740
+  Sample 2: 1710
+  Sample 3: 1650
+  Sample 4: 1500
+ -> 1650
+PWM 95
+  Sample 1: 30364
+  Sample 2: 30334
+  Sample 3: 30364
+  Sample 4: 30184
+ -> 30311
+PWM 90
+  Sample 1: 30064
+  Sample 2: 30124
+  Sample 3: 30034
+  Sample 4: 30034
+ -> 30064
+PWM 85
+  Sample 1: 30154
+  Sample 2: 30064
+  Sample 3: 30064
+  Sample 4: 30124
+ -> 30101
+PWM 80
+  Sample 1: 30154
+  Sample 2: 30094
+  Sample 3: 30124
+  Sample 4: 30184
+ -> 30139
+PWM 75
+  Sample 1: 30094
+  Sample 2: 30124
+  Sample 3: 29734
+  Sample 4: 30064
+ -> 30004
+PWM 70
+  Sample 1: 30064
+  Sample 2: 30034
+  Sample 3: 30064
+  Sample 4: 29944
+ -> 30026
+PWM 65
+  Sample 1: 29914
+  Sample 2: 19414
+  Sample 3: 11974
+  Sample 4: 30064
+ -> 22841
+PWM 60
+  Sample 1: 29884
+  Sample 2: 29974
+  Sample 3: 29884
+  Sample 4: 29974
+ -> 29929
+PWM 55
+  Sample 1: 29974
+  Sample 2: 29944
+  Sample 3: 30004
+  Sample 4: 30094
+ -> 30004
+PWM 50
+  Sample 1: 30064
+  Sample 2: 30034
+  Sample 3: 30184
+  Sample 4: 29914
+ -> 30049
+PWM 45
+  Sample 1: 30094
+  Sample 2: 29914
+  Sample 3: 29914
+  Sample 4: 29974
+ -> 29974
+PWM 40
+  Sample 1: 29914
+  Sample 2: 29824
+  Sample 3: 29974
+  Sample 4: 29794
+ -> 29876
+PWM 35
+  Sample 1: 29794
+  Sample 2: 29704
+  Sample 3: 29824
+  Sample 4: 29794
+ -> 29779
+PWM 30
+  Sample 1: 29854
+  Sample 2: 29794
+  Sample 3: 29944
+  Sample 4: 29764
+ -> 29839
+PWM 25
+  Sample 1: 29764
+  Sample 2: 29794
+  Sample 3: 29794
+  Sample 4: 29974
+ -> 29831
+PWM 20
+  Sample 1: 29614
+  Sample 2: 29734
+  Sample 3: 29794
+  Sample 4: 29854
+ -> 29749
+PWM 15
+  Sample 1: 29794
+  Sample 2: 29734
+  Sample 3: 29854
+  Sample 4: 29734
+ -> 29779
+PWM 10
+  Sample 1: 29854
+  Sample 2: 29674
+  Sample 3: 29704
+  Sample 4: 29764
+ -> 29749
+PWM 5
+  Sample 1: 29494
+  Sample 2: 29524
+  Sample 3: 29554
+  Sample 4: 29524
+ -> 29524
+PWM 0
+  Sample 1: 480
+  Sample 2: 450
+  Sample 3: 480
+  Sample 4: 450
+ -> 465
+
+=== Halte PWM suchen ===
+PWM 100 -> 1800
+PWM 99 -> 30464
+PWM 98 -> 30244
+PWM 97 -> 30544
+PWM 96 -> 30484
+PWM 95 -> 30444
+PWM 94 -> 30304
+PWM 93 -> 30104
+PWM 92 -> 30204
+PWM 91 -> 30144
+PWM 90 -> 30104
+PWM 89 -> 30124
+PWM 88 -> 30024
+PWM 87 -> 30144
+PWM 86 -> 30044
+PWM 85 -> 30084
+PWM 84 -> 30064
+PWM 83 -> 30104
+PWM 82 -> 30064
+PWM 81 -> 30004
+PWM 80 -> 30064
+PWM 79 -> 30104
+PWM 78 -> 30264
+PWM 77 -> 30084
+PWM 76 -> 30024
+PWM 75 -> 30084
+PWM 74 -> 30144
+PWM 73 -> 29964
+PWM 72 -> 30164
+PWM 71 -> 30184
+PWM 70 -> 30104
+PWM 69 -> 30124
+PWM 68 -> 30124
+PWM 67 -> 30004
+PWM 66 -> 30044
+PWM 65 -> 30184
+PWM 64 -> 30064
+PWM 63 -> 30244
+PWM 62 -> 30044
+PWM 61 -> 29924
+PWM 60 -> 30104
+PWM 59 -> 30184
+PWM 58 -> 29944
+PWM 57 -> 29984
+PWM 56 -> 29924
+PWM 55 -> 30044
+PWM 54 -> 30064
+PWM 53 -> 30044
+PWM 52 -> 30044
+PWM 51 -> 29924
+PWM 50 -> 29984
+PWM 49 -> 30104
+PWM 48 -> 30264
+PWM 47 -> 30164
+PWM 46 -> 30244
+PWM 45 -> 29884
+PWM 44 -> 30064
+PWM 43 -> 29904
+PWM 42 -> 29904
+PWM 41 -> 30044
+PWM 40 -> 29944
+PWM 39 -> 29924
+PWM 38 -> 30004
+PWM 37 -> 29904
+PWM 36 -> 30084
+PWM 35 -> 29984
+PWM 34 -> 29904
+PWM 33 -> 29924
+PWM 32 -> 29864
+PWM 31 -> 29784
+PWM 30 -> 29904
+PWM 29 -> 29924
+PWM 28 -> 29804
+PWM 27 -> 29844
+PWM 26 -> 29904
+PWM 25 -> 29944
+PWM 24 -> 29764
+PWM 23 -> 29764
+PWM 22 -> 29744
+PWM 21 -> 29744
+PWM 20 -> 29804
+PWM 19 -> 29964
+PWM 18 -> 29724
+PWM 17 -> 29924
+PWM 16 -> 29704
+PWM 15 -> 29944
+PWM 14 -> 29964
+PWM 13 -> 29744
+PWM 12 -> 29724
+PWM 11 -> 29764
+PWM 10 -> 29804
+PWM 9 -> 29784
+PWM 8 -> 29764
+PWM 7 -> 29724
+PWM 6 -> 29744
+PWM 5 -> 29644
+PWM 4 -> 29524
+PWM 3 -> 29564
+PWM 2 -> 29524
+PWM 1 -> 29524
+PWM 0 -> 440
+
+=== Ergebnis ===
+Start PWM: 0
+Hold PWM: 0
+
+---
+Up
+0% -> 472
+5% -> 29494
+10% -> 29696
+15% -> 29771
+20% -> 29749
+25% -> 29786
+30% -> 29839
+35% -> 29824
+40% -> 29854
+45% -> 29914
+50% -> 29974
+55% -> 29966
+60% -> 29951
+65% -> 29981
+70% -> 30026
+75% -> 30079
+80% -> 30139
+85% -> 30169
+90% -> 30139
+95% -> 30401
+100% -> 1672
+
+---
+Down
+100% -> 1650
+95% -> 30311
+90% -> 30064
+85% -> 30101
+80% -> 30139
+75% -> 30004
+70% -> 30026
+65% -> 22841
+60% -> 29929
+55% -> 30004
+50% -> 30049
+45% -> 29974
+40% -> 29876
+35% -> 29779
+30% -> 29839
+25% -> 29831
+20% -> 29749
+15% -> 29779
+10% -> 29749
+5% -> 29524
+0% -> 465
+
+FanCurvePoint curve[] = {
+  {0, 472},
+  {5, 29494},
+  {10, 29696},
+  {15, 29771},
+  {20, 29749},
+  {25, 29786},
+  {30, 29839},
+  {35, 29824},
+  {40, 29854},
+  {45, 29914},
+  {50, 29974},
+  {55, 29966},
+  {60, 29951},
+  {65, 29981},
+  {70, 30026},
+  {75, 30079},
+  {80, 30139},
+  {85, 30169},
+  {90, 30139},
+  {95, 30401},
+  {100, 1672},
+};

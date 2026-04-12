@@ -1,0 +1,345 @@
+Mit Pull up 3,3k Ohm an TACH und 3,3V UND 0,1uF ZWischen Tacho und GND
+
+Fan Auto Test startet...
+
+=== Start PWM suchen ===
+  PWM 0% -> 1680
+  PWM 0% -> 1710
+  PWM 0% -> 1680
+Start PWM: 0
+
+=== Kennlinie aufwärts ===
+PWM 0
+  Sample 1: 1830
+  Sample 2: 2160
+  Sample 3: 1770
+  Sample 4: 1770
+ -> 1882
+PWM 5
+  Sample 1: 30664
+  Sample 2: 30544
+  Sample 3: 30604
+  Sample 4: 30364
+ -> 30544
+PWM 10
+  Sample 1: 30364
+  Sample 2: 30274
+  Sample 3: 30304
+  Sample 4: 30214
+ -> 30289
+PWM 15
+  Sample 1: 30274
+  Sample 2: 30004
+  Sample 3: 30274
+  Sample 4: 29974
+ -> 30131
+PWM 20
+  Sample 1: 30124
+  Sample 2: 30334
+  Sample 3: 30184
+  Sample 4: 30214
+ -> 30214
+PWM 25
+  Sample 1: 30064
+  Sample 2: 30094
+  Sample 3: 30124
+  Sample 4: 30064
+ -> 30086
+PWM 30
+  Sample 1: 30634
+  Sample 2: 30334
+  Sample 3: 30514
+  Sample 4: 30274
+ -> 30439
+PWM 35
+  Sample 1: 30214
+  Sample 2: 30064
+  Sample 3: 30154
+  Sample 4: 30004
+ -> 30109
+PWM 40
+  Sample 1: 30184
+  Sample 2: 29974
+  Sample 3: 29704
+  Sample 4: 29974
+ -> 29959
+PWM 45
+  Sample 1: 29974
+  Sample 2: 29794
+  Sample 3: 29914
+  Sample 4: 29794
+ -> 29869
+PWM 50
+  Sample 1: 30184
+  Sample 2: 29794
+  Sample 3: 30154
+  Sample 4: 29974
+ -> 30026
+PWM 55
+  Sample 1: 30034
+  Sample 2: 29914
+  Sample 3: 29854
+  Sample 4: 29704
+ -> 29876
+PWM 60
+  Sample 1: 29614
+  Sample 2: 29884
+  Sample 3: 29854
+  Sample 4: 29914
+ -> 29816
+PWM 65
+  Sample 1: 30094
+  Sample 2: 29644
+  Sample 3: 29734
+  Sample 4: 29794
+ -> 29816
+PWM 70
+  Sample 1: 30184
+  Sample 2: 29464
+  Sample 3: 29464
+  Sample 4: 29614
+ -> 29681
+PWM 75
+  Sample 1: 29404
+  Sample 2: 29224
+  Sample 3: 29494
+  Sample 4: 29584
+ -> 29426
+PWM 80
+  Sample 1: 29554
+  Sample 2: 29314
+  Sample 3: 29494
+  Sample 4: 29884
+ -> 29561
+PWM 85
+  Sample 1: 29374
+  Sample 2: 29524
+  Sample 3: 29374
+  Sample 4: 29554
+ -> 29456
+PWM 90
+  Sample 1: 29194
+  Sample 2: 29194
+  Sample 3: 29314
+  Sample 4: 29284
+ -> 29246
+PWM 95
+  Sample 1: 29314
+  Sample 2: 29254
+  Sample 3: 29074
+  Sample 4: 29104
+ -> 29186
+PWM 100
+  Sample 1: 0
+  Sample 2: 0
+  Sample 3: 0
+  Sample 4: 0
+ -> 0
+
+=== Kennlinie abwärts ===
+PWM 100
+  Sample 1: 0
+  Sample 2: 0
+  Sample 3: 0
+  Sample 4: 0
+ -> 0
+PWM 95
+  Sample 1: 29254
+  Sample 2: 29134
+  Sample 3: 29074
+  Sample 4: 29044
+ -> 29126
+PWM 90
+  Sample 1: 29284
+  Sample 2: 29254
+  Sample 3: 29314
+  Sample 4: 29284
+ -> 29284
+PWM 85
+  Sample 1: 29344
+  Sample 2: 29254
+  Sample 3: 29434
+  Sample 4: 29464
+ -> 29374
+PWM 80
+  Sample 1: 29644
+  Sample 2: 29734
+  Sample 3: 29584
+  Sample 4: 29674
+ -> 29659
+PWM 75
+  Sample 1: 29434
+  Sample 2: 29404
+  Sample 3: 29524
+  Sample 4: 29314
+ -> 29419
+PWM 70
+  Sample 1: 29854
+  Sample 2: 29674
+  Sample 3: 29584
+  Sample 4: 29644
+ -> 29689
+PWM 65
+  Sample 1: 29944
+  Sample 2: 29524
+  Sample 3: 29824
+  Sample 4: 30004
+ -> 29824
+PWM 60
+  Sample 1: 30274
+  Sample 2: 29614
+  Sample 3: 29764
+  Sample 4: 29854
+ -> 29876
+PWM 55
+  Sample 1: 29644
+  Sample 2: 29734
+  Sample 3: 29464
+  Sample 4: 30004
+ -> 29711
+PWM 50
+  Sample 1: 30094
+  Sample 2: 29794
+  Sample 3: 29854
+  Sample 4: 29794
+ -> 29884
+PWM 45
+  Sample 1: 29674
+  Sample 2: 30004
+  Sample 3: 29704
+  Sample 4: 30034
+ -> 29854
+PWM 40
+  Sample 1: 30274
+  Sample 2: 29974
+  Sample 3: 30064
+  Sample 4: 29974
+ -> 30071
+PWM 35
+  Sample 1: 30154
+  Sample 2: 30034
+  Sample 3: 29974
+  Sample 4: 30124
+ -> 30071
+PWM 30
+  Sample 1: 30424
+  Sample 2: 30364
+  Sample 3: 30364
+  Sample 4: 30574
+ -> 30431
+PWM 25
+  Sample 1: 29974
+  Sample 2: 29854
+  Sample 3: 29944
+  Sample 4: 29884
+ -> 29914
+PWM 20
+  Sample 1: 30244
+  Sample 2: 30124
+  Sample 3: 30394
+  Sample 4: 30154
+ -> 30229
+PWM 15
+  Sample 1: 30244
+  Sample 2: 30154
+  Sample 3: 30124
+  Sample 4: 30244
+ -> 30191
+PWM 10
+  Sample 1: 30304
+  Sample 2: 30334
+  Sample 3: 30274
+  Sample 4: 30304
+ -> 30304
+PWM 5
+  Sample 1: 30874
+  Sample 2: 30574
+  Sample 3: 30574
+  Sample 4: 30784
+ -> 30701
+PWM 0
+  Sample 1: 1680
+  Sample 2: 1650
+  Sample 3: 1650
+  Sample 4: 1530
+ -> 1627
+
+=== Halte PWM suchen ===
+PWM 100 -> 0
+Halte PWM: 100
+
+=== Ergebnis ===
+Start PWM: 0
+Hold PWM: 100
+
+---
+Up
+0% -> 1882
+5% -> 30544
+10% -> 30289
+15% -> 30131
+20% -> 30214
+25% -> 30086
+30% -> 30439
+35% -> 30109
+40% -> 29959
+45% -> 29869
+50% -> 30026
+55% -> 29876
+60% -> 29816
+65% -> 29816
+70% -> 29681
+75% -> 29426
+80% -> 29561
+85% -> 29456
+90% -> 29246
+95% -> 29186
+100% -> 0
+
+---
+Down
+100% -> 0
+95% -> 29126
+90% -> 29284
+85% -> 29374
+80% -> 29659
+75% -> 29419
+70% -> 29689
+65% -> 29824
+60% -> 29876
+55% -> 29711
+50% -> 29884
+45% -> 29854
+40% -> 30071
+35% -> 30071
+30% -> 30431
+25% -> 29914
+20% -> 30229
+15% -> 30191
+10% -> 30304
+5% -> 30701
+0% -> 1627
+
+FanCurvePoint curve[] = {
+  {0, 1882},
+  {5, 30544},
+  {10, 30289},
+  {15, 30131},
+  {20, 30214},
+  {25, 30086},
+  {30, 30439},
+  {35, 30109},
+  {40, 29959},
+  {45, 29869},
+  {50, 30026},
+  {55, 29876},
+  {60, 29816},
+  {65, 29816},
+  {70, 29681},
+  {75, 29426},
+  {80, 29561},
+  {85, 29456},
+  {90, 29246},
+  {95, 29186},
+  {100, 0},
+};

@@ -3,8 +3,8 @@
 // --------------------------------------------------
 // Pinbelegung
 // --------------------------------------------------
-constexpr int PIN_FAN_PWM  = 18;
-constexpr int PIN_FAN_TACH = 19;
+constexpr int PIN_FAN_PWM  = 25;
+constexpr int PIN_FAN_TACH = 26;
 
 // --------------------------------------------------
 // PWM
@@ -26,9 +26,11 @@ constexpr uint8_t CURVE_STEP_PWM    = 5;
 
 constexpr uint32_t SETTLE_TIME_MS = 3000;
 constexpr uint32_t SAMPLE_TIME_MS = 5000;
+constexpr uint32_t STOP_CHECK_TIME_MS = 500;
 
 constexpr uint16_t RPM_START_THRESHOLD = 150;
 constexpr uint8_t STABLE_REQUIRED = 3;
+constexpr uint8_t STOP_ZERO_REQUIRED = 2;
 
 constexpr size_t MAX_POINTS = 32;
 
@@ -82,6 +84,29 @@ uint16_t measureRpm(uint32_t durationMs) {
 }
 
 // --------------------------------------------------
+void waitForFanStop(const char* reason) {
+  Serial.println();
+  Serial.println(reason);
+
+  uint8_t zeroCount = 0;
+
+  while (zeroCount < STOP_ZERO_REQUIRED) {
+    uint16_t rpm = measureRpm(STOP_CHECK_TIME_MS);
+
+    Serial.print("  RPM -> ");
+    Serial.println(rpm);
+
+    if (rpm == 0) {
+      zeroCount++;
+    } else {
+      zeroCount = 0;
+    }
+  }
+
+  Serial.println("  Fan steht sicher.");
+}
+
+// --------------------------------------------------
 uint16_t measureStable(uint8_t pwm) {
   setFanPwmPercent(pwm);
   delay(SETTLE_TIME_MS);
@@ -125,7 +150,7 @@ bool isRunning(uint8_t pwm) {
 // --------------------------------------------------
 void stopFan() {
   setFanPwmPercent(0);
-  delay(5000);
+  waitForFanStop("Warte auf Stillstand des Luefters...");
 }
 
 // --------------------------------------------------
@@ -160,13 +185,23 @@ void measureUp(uint8_t startPwm) {
   stopFan();
   startBoost();
 
-  for (uint8_t pwm = startPwm; pwm <= 100; pwm += CURVE_STEP_PWM) {
+  for (uint8_t pwm = startPwm; pwm < 100; pwm += CURVE_STEP_PWM) {
     Serial.print("PWM ");
     Serial.println(pwm);
 
     uint16_t rpm = measureStable(pwm);
 
     curveUp[curveUpCount++] = {pwm, rpm};
+
+    Serial.print(" -> ");
+    Serial.println(rpm);
+  }
+
+  if (curveUpCount == 0 || curveUp[curveUpCount - 1].pwm != 100) {
+    Serial.println("PWM 100");
+
+    uint16_t rpm = measureStable(100);
+    curveUp[curveUpCount++] = {100, rpm};
 
     Serial.print(" -> ");
     Serial.println(rpm);
@@ -262,6 +297,7 @@ void setup() {
   delay(1500);
 
   ledcAttach(PIN_FAN_PWM, PWM_FREQ_HZ, PWM_RES_BITS);
+  setFanPwmPercent(0);
 
   pinMode(PIN_FAN_TACH, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_FAN_TACH), onTachPulse, FALLING);
@@ -273,6 +309,8 @@ void setup() {
 void loop() {
 
   if (done) return;
+
+  waitForFanStop("Starte Test erst bei 0 RPM...");
 
   detectedStartPwm = detectStart();
   measureUp(detectedStartPwm);

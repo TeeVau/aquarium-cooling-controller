@@ -13,15 +13,15 @@ flowchart LR
         ESP["ESP32-DevKitC V4<br/>ESP32-WROOM-32E"]
         V33["3.3 V"]
         PULL1["4.7k Pull-up<br/>1-Wire to 3.3 V"]
-        PULL2["4.7k Pull-up<br/>TACH to 3.3 V"]
+        PULL2["3.3k Pull-up<br/>TACH to 3.3 V"]
         PWMIF["PWM Interface Stage<br/>TBD / validate with 4-pin fan"]
 
         TERMF["Terminal Block<br/>Fan"]
         TERMSW["Terminal Block<br/>Water Sensor"]
         TERMSA["Terminal Block<br/>Air Sensor"]
 
-        GPIO18["GPIO18<br/>Fan PWM"]
-        GPIO19["GPIO19<br/>Fan TACH"]
+        GPIO25["GPIO25<br/>Fan PWM"]
+        GPIO26["GPIO26<br/>Fan TACH"]
         GPIO4["GPIO4<br/>1-Wire Bus"]
       end
     end
@@ -46,15 +46,15 @@ flowchart LR
   GPIO4 --- TERMSW
   GPIO4 --- TERMSA
 
-  GPIO18 --> PWMIF
+  GPIO25 --> PWMIF
   PWMIF --> TERMF
 
   TERMF --> FAN
   TERMSW --> DSW
   TERMSA --> DSA
 
-  FAN --> GPIO19
-  GPIO19 --- PULL2
+  FAN --> GPIO26
+  GPIO26 --- PULL2
 
   GND --- ESP
   GND --- TERMF

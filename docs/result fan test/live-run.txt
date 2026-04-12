@@ -1,0 +1,408 @@
+﻿ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:1
+load:0x3fff0030,len:4876
+ho 0 tail 12 room 4
+load:0x40078000,len:16560
+load:0x40080400,len:3500
+entry 0x400805b4
+Fan Auto Test startet...
+
+Starte Test erst bei 0 RPM...
+  RPM -> 60
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+
+=== Start PWM suchen ===
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 0% -> 0
+  PWM 0% -> 0
+  PWM 0% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 1% -> 0
+  PWM 1% -> 0
+  PWM 1% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 2% -> 0
+  PWM 2% -> 0
+  PWM 2% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 3% -> 0
+  PWM 3% -> 0
+  PWM 3% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 4% -> 0
+  PWM 4% -> 0
+  PWM 4% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 5% -> 0
+  PWM 5% -> 0
+  PWM 5% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 6% -> 0
+  PWM 6% -> 0
+  PWM 6% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 7% -> 0
+  PWM 7% -> 0
+  PWM 7% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 8% -> 0
+  PWM 8% -> 0
+  PWM 8% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 9% -> 0
+  PWM 9% -> 0
+  PWM 9% -> 0
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 10% -> 150
+  PWM 10% -> 150
+  PWM 10% -> 150
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 11% -> 180
+  PWM 11% -> 150
+  PWM 11% -> 180
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+  PWM 12% -> 210
+  PWM 12% -> 180
+  PWM 12% -> 180
+Start PWM: 12
+
+=== Kennlinie aufw??rts ===
+
+Warte auf Stillstand des Luefters...
+  RPM -> 0
+  RPM -> 0
+  Fan steht sicher.
+PWM 12
+  Sample 1: 210
+  Sample 2: 180
+  Sample 3: 180
+  Sample 4: 180
+ -> 187
+PWM 17
+  Sample 1: 270
+  Sample 2: 270
+  Sample 3: 270
+  Sample 4: 300
+ -> 277
+PWM 22
+  Sample 1: 360
+  Sample 2: 330
+  Sample 3: 360
+  Sample 4: 360
+ -> 352
+PWM 27
+  Sample 1: 420
+  Sample 2: 450
+  Sample 3: 450
+  Sample 4: 420
+ -> 435
+PWM 32
+  Sample 1: 510
+  Sample 2: 540
+  Sample 3: 540
+  Sample 4: 480
+ -> 517
+PWM 37
+  Sample 1: 570
+  Sample 2: 570
+  Sample 3: 570
+  Sample 4: 570
+ -> 570
+PWM 42
+  Sample 1: 660
+  Sample 2: 630
+  Sample 3: 630
+  Sample 4: 630
+ -> 637
+PWM 47
+  Sample 1: 690
+  Sample 2: 690
+  Sample 3: 690
+  Sample 4: 720
+ -> 697
+PWM 52
+  Sample 1: 780
+  Sample 2: 780
+  Sample 3: 750
+  Sample 4: 750
+ -> 765
+PWM 57
+  Sample 1: 810
+  Sample 2: 840
+  Sample 3: 840
+  Sample 4: 840
+ -> 832
+PWM 62
+  Sample 1: 930
+  Sample 2: 870
+  Sample 3: 870
+  Sample 4: 870
+ -> 885
+PWM 67
+  Sample 1: 930
+  Sample 2: 930
+  Sample 3: 930
+  Sample 4: 930
+ -> 930
+PWM 72
+  Sample 1: 990
+  Sample 2: 990
+  Sample 3: 990
+  Sample 4: 1020
+ -> 997
+PWM 77
+  Sample 1: 1050
+  Sample 2: 1080
+  Sample 3: 1020
+  Sample 4: 1050
+ -> 1050
+PWM 82
+  Sample 1: 1080
+  Sample 2: 1110
+  Sample 3: 1140
+  Sample 4: 1080
+ -> 1102
+PWM 87
+  Sample 1: 1170
+  Sample 2: 1140
+  Sample 3: 1140
+  Sample 4: 1140
+ -> 1147
+PWM 92
+  Sample 1: 1140
+  Sample 2: 1200
+  Sample 3: 1200
+  Sample 4: 1200
+ -> 1185
+PWM 97
+  Sample 1: 1230
+  Sample 2: 1230
+  Sample 3: 1260
+  Sample 4: 1200
+ -> 1230
+PWM 100
+  Sample 1: 1260
+  Sample 2: 1230
+  Sample 3: 1260
+  Sample 4: 1260
+ -> 1252
+
+=== Kennlinie abw??rts ===
+PWM 100
+  Sample 1: 1230
+  Sample 2: 1260
+  Sample 3: 1230
+  Sample 4: 1230
+ -> 1237
+PWM 95
+  Sample 1: 1230
+  Sample 2: 1260
+  Sample 3: 1230
+  Sample 4: 1260
+ -> 1245
+PWM 90
+  Sample 1: 1140
+  Sample 2: 1140
+  Sample 3: 1140
+  Sample 4: 1140
+ -> 1140
+PWM 85
+  Sample 1: 1140
+  Sample 2: 1140
+  Sample 3: 1110
+  Sample 4: 1110
+ -> 1125
+PWM 80
+  Sample 1: 1110
+  Sample 2: 1110
+  Sample 3: 1110
+  Sample 4: 1050
+ -> 1095
+PWM 75
+  Sample 1: 990
+  Sample 2: 1020
+  Sample 3: 1020
+  Sample 4: 1050
+ -> 1020
+PWM 70
+  Sample 1: 960
+  Sample 2: 960
+  Sample 3: 960
+  Sample 4: 1020
+ -> 975
+PWM 65
+  Sample 1: 990
+  Sample 2: 930
+  Sample 3: 930
+  Sample 4: 900
+ -> 937
+PWM 60
+  Sample 1: 870
+  Sample 2: 900
+  Sample 3: 840
+  Sample 4: 870
+ -> 870
+PWM 55
+  Sample 1: 810
+  Sample 2: 810
+  Sample 3: 780
+  Sample 4: 810
+ -> 802
+PWM 50
+  Sample 1: 780
+  Sample 2: 750
+  Sample 3: 750
+  Sample 4: 750
+ -> 757
+PWM 45
+  Sample 1: 690
+  Sample 2: 660
+  Sample 3: 690
+  Sample 4: 660
+ -> 675
+PWM 40
+  Sample 1: 630
+  Sample 2: 660
+  Sample 3: 600
+  Sample 4: 660
+ -> 637
+PWM 35
+  Sample 1: 570
+  Sample 2: 570
+  Sample 3: 540
+  Sample 4: 570
+ -> 562
+PWM 30
+  Sample 1: 480
+  Sample 2: 480
+  Sample 3: 480
+  Sample 4: 480
+ -> 480
+PWM 25
+  Sample 1: 390
+  Sample 2: 390
+  Sample 3: 420
+  Sample 4: 390
+ -> 397
+PWM 20
+  Sample 1: 330
+  Sample 2: 330
+  Sample 3: 330
+  Sample 4: 330
+ -> 330
+PWM 15
+  Sample 1: 240
+  Sample 2: 210
+  Sample 3: 240
+  Sample 4: 240
+ -> 232
+PWM 10
+  Sample 1: 150
+  Sample 2: 150
+  Sample 3: 150
+  Sample 4: 150
+ -> 150
+PWM 5
+  Sample 1: 0
+  Sample 2: 0
+  Sample 3: 0
+  Sample 4: 0
+ -> 0
+PWM 0
+  Sample 1: 0
+  Sample 2: 0
+  Sample 3: 0
+  Sample 4: 0
+ -> 0
+
+=== Halte PWM suchen ===
+PWM 100 -> 1240
+PWM 99 -> 1240
+PWM 98 -> 1220
+PWM 97 -> 1260
+PWM 96 -> 1200
+PWM 95 -> 1220
+PWM 94 -> 1180
+PWM 93 -> 1200
+PWM 92 -> 1180
+PWM 91 -> 1180
+PWM 90 -> 1160
+PWM 89 -> 1140
+PWM 88 -> 1140
+PWM 87 -> 1120
+PWM 86 -> 1120
+PWM 85 -> 1140
+PWM 84 -> 1120
+PWM 83 -> 1100
+PWM 82 -> 1080
+PWM 81 -> 1120
+PWM 80 -> 1060
+PWM 79 -> 1080
+PWM 78 -> 1040
+PWM 77 -> 1060
+PWM 76 -> 1060
+PWM 75 -> 1040
+PWM 74 -> 1020
+PWM 73 -> 1020
+PWM 72 -> 980
+PWM 71 -> 1060
+PWM 70 -> 960
+PWM 69 -> 980

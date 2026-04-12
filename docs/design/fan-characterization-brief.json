@@ -10,8 +10,13 @@
     "power": "USB-C PD 12V"
   },
   "pinout": {
-    "fan_pwm": 18,
-    "fan_tach": 19
+    "fan_pwm": 25,
+    "fan_tach": 26
+  },
+  "validated_bench_setup": {
+    "fan_model": "Noctua NF-S12A PWM",
+    "tach_pullup_ohm": 3300,
+    "common_ground_required": true
   },
   "test_procedure": {
     "steps": [
@@ -36,6 +41,14 @@
       "c_array"
     ],
     "goal": "Create PWM-RPM characteristic curve"
+  },
+  "measured_results": {
+    "date": "2026-04-12",
+    "start_pwm_percent": 12,
+    "hold_pwm_percent": 10,
+    "rpm_at_0_percent": 0,
+    "rpm_at_5_percent": 0,
+    "rpm_at_100_percent": 1252
   },
   "future_usage": {
     "purpose": "fan plausibility check",

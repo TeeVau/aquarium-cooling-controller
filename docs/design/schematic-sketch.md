@@ -22,7 +22,11 @@ wiring concept for fan, water sensor, and air sensor.
   exact electrical compatibility with the selected 4-pin fan still needs
   prototype validation.
 - DS18B20 water and air sensors share one 1-Wire bus on GPIO4.
-- Tach input on GPIO19 uses a pull-up to 3.3 V.
+- Fan PWM is currently assigned to GPIO25.
+- Tach input is currently assigned to GPIO26 and uses a 3.3 kOhm pull-up to
+  3.3 V in the verified bench setup.
+- Common ground between ESP32, fan, and 12 V fan supply is required for
+  correct PWM and TACH behavior.
 - Fan power stays on 12 V, while the ESP32 is supplied through a buck
   converter.
 - The enclosure is modeled as the central integration point for USB-C PD board,

@@ -132,9 +132,18 @@ Pin assignment:
 
 | Signal | ESP32 GPIO | Notes |
 |---|---:|---|
-| Fan PWM | 18 | 25 kHz PWM output |
-| Fan TACH | 19 | Interrupt-capable input with pull-up |
+| Fan PWM | 25 | 25 kHz PWM output |
+| Fan TACH | 26 | Interrupt-capable input with 3.3 kOhm pull-up to 3.3 V |
 | 1-Wire bus | 4 | Shared bus for both DS18B20 sensors |
+
+Fan connector pinout:
+
+| Fan Pin | Signal | Typical Color | Project Connection |
+|---|---|---|---|
+| 1 | GND | Black | Common GND |
+| 2 | +12 V | Yellow | 12 V fan supply from PD rail |
+| 3 | TACH | Green | ESP32 GPIO26 tach input |
+| 4 | PWM | Blue | ESP32 GPIO25 PWM output via interface stage |
 
 Hardware constraints:
 
@@ -211,6 +220,7 @@ Deliverables:
 - Human-readable serial log
 - Tabular PWM/RPM output
 - C-array initializer for measured curve points
+- Bench log and summarized characterization result stored in project docs
 
 Exit criteria:
 
@@ -220,6 +230,7 @@ Exit criteria:
 - Hold PWM is reported
 - Up and down curves are printed
 - Measured data is reusable in later firmware
+- Latest verified characterization run is archived in project documentation
 
 Dependencies:
 
@@ -774,7 +785,60 @@ automatic with no runtime command input.
 | Preferred mounting position | Above aquarium frame, rear side, near lighting |
 | Design intent | Short cable runs, centralized electronics, serviceable installation |
 
-### D. Open Points Requiring Finalization
+### D. Wiring Summary
+
+| Signal | Mapping |
+|---|---|
+| Fan PWM | ESP32 GPIO25 -> fan pin 4 (PWM) |
+| Fan TACH | fan pin 3 (TACH) -> ESP32 GPIO26 |
+| Fan Power | fan pin 2 -> +12 V, fan pin 1 -> GND |
+| DS18B20 bus | ESP32 GPIO4 shared 1-Wire bus with 4.7 kOhm pull-up to 3.3 V |
+
+### E. Verified Fan Characterization Result
+
+Latest verified bench result on `2026-04-12` with `Noctua NF-S12A PWM`:
+
+| Metric | Value |
+|---|---:|
+| Start PWM from standstill | 12 % |
+| Minimum hold PWM while spinning | 10 % |
+| RPM at 0 % PWM | 0 |
+| RPM at 5 % PWM | 0 |
+| RPM at 100 % PWM | 1252 |
+
+Reference artifacts:
+
+- `docs/result fan test/measurement-summary-2026-04-12.md`
+- `docs/result fan test/live-run.txt`
+- `docs/result fan test/live-run-part2.txt`
+
+Verified upward curve:
+
+```cpp
+FanCurvePoint curve[] = {
+  {12, 187},
+  {17, 277},
+  {22, 352},
+  {27, 435},
+  {32, 517},
+  {37, 570},
+  {42, 637},
+  {47, 697},
+  {52, 765},
+  {57, 832},
+  {62, 885},
+  {67, 930},
+  {72, 997},
+  {77, 1050},
+  {82, 1102},
+  {87, 1147},
+  {92, 1185},
+  {97, 1230},
+  {100, 1252},
+};
+```
+
+### F. Open Points Requiring Finalization
 
 - Final plausibility tolerance percentage after measured tuning
 - Final reaction to confirmed fan fault in production mode
@@ -784,7 +848,7 @@ automatic with no runtime command input.
 - Exact OTA manifest format, approval policy, and authentication details
 - Exact enclosure geometry, mounting method, and splash-protection details
 
-### E. Draft Schematic Sketch
+### G. Draft Schematic Sketch
 
 - Mermaid source: `docs/design/schematic-sketch.mmd`
 - Usage: paste the Mermaid source into draw.io via `Arrange -> Insert ->
