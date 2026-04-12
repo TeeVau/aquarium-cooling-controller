@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Noctua NF-S12A PWM fan curve</title>
+  <desc id="desc">Measured PWM to RPM fan curve with upward and downward sweeps, plus start and hold PWM markers.</desc>
+  <style>
+    .bg { fill: #fcfbf7; }
+    .panel { fill: #fffdfa; stroke: #d8d1c6; stroke-width: 1; }
+    .grid { stroke: #e9e2d8; stroke-width: 1; }
+    .axis { stroke: #4a4036; stroke-width: 2; }
+    .label { fill: #3f352d; font-family: Arial, sans-serif; font-size: 14px; }
+    .small { fill: #6b5e54; font-family: Arial, sans-serif; font-size: 12px; }
+    .title { fill: #2d261f; font-family: Arial, sans-serif; font-size: 24px; font-weight: 700; }
+    .subtitle { fill: #6b5e54; font-family: Arial, sans-serif; font-size: 14px; }
+    .up { fill: none; stroke: #0f766e; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    .down { fill: none; stroke: #c2410c; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    .marker { stroke: #7c6f64; stroke-width: 2; stroke-dasharray: 8 6; }
+    .point-up { fill: #0f766e; }
+    .point-down { fill: #c2410c; }
+    .legend-box { fill: #fffdfa; stroke: #d8d1c6; stroke-width: 1; }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="900" height="520" />
+  <rect class="panel" x="40" y="30" width="820" height="450" rx="16" />
+
+  <text class="title" x="70" y="72">Measured Fan Curve</text>
+  <text class="subtitle" x="70" y="96">Noctua NF-S12A PWM, GPIO25 PWM, GPIO26 TACH, 3.3k pull-up on TACH</text>
+
+  <line class="grid" x1="70" y1="350" x2="730" y2="350" />
+  <line class="grid" x1="70" y1="300.77" x2="730" y2="300.77" />
+  <line class="grid" x1="70" y1="251.54" x2="730" y2="251.54" />
+  <line class="grid" x1="70" y1="202.31" x2="730" y2="202.31" />
+  <line class="grid" x1="70" y1="153.08" x2="730" y2="153.08" />
+  <line class="grid" x1="70" y1="103.85" x2="730" y2="103.85" />
+  <line class="grid" x1="70" y1="54.62" x2="730" y2="54.62" />
+
+  <line class="grid" x1="70" y1="30" x2="70" y2="350" />
+  <line class="grid" x1="136" y1="30" x2="136" y2="350" />
+  <line class="grid" x1="202" y1="30" x2="202" y2="350" />
+  <line class="grid" x1="268" y1="30" x2="268" y2="350" />
+  <line class="grid" x1="334" y1="30" x2="334" y2="350" />
+  <line class="grid" x1="400" y1="30" x2="400" y2="350" />
+  <line class="grid" x1="466" y1="30" x2="466" y2="350" />
+  <line class="grid" x1="532" y1="30" x2="532" y2="350" />
+  <line class="grid" x1="598" y1="30" x2="598" y2="350" />
+  <line class="grid" x1="664" y1="30" x2="664" y2="350" />
+  <line class="grid" x1="730" y1="30" x2="730" y2="350" />
+
+  <line class="axis" x1="70" y1="350" x2="730" y2="350" />
+  <line class="axis" x1="70" y1="30" x2="70" y2="350" />
+
+  <line class="marker" x1="136" y1="30" x2="136" y2="350" />
+  <line class="marker" x1="149.2" y1="30" x2="149.2" y2="350" />
+
+  <text class="small" x="60" y="354">0</text>
+  <text class="small" x="45" y="305">200</text>
+  <text class="small" x="45" y="256">400</text>
+  <text class="small" x="45" y="207">600</text>
+  <text class="small" x="45" y="158">800</text>
+  <text class="small" x="38" y="109">1000</text>
+  <text class="small" x="38" y="60">1200</text>
+
+  <text class="small" x="66" y="374">0</text>
+  <text class="small" x="128" y="374">10</text>
+  <text class="small" x="194" y="374">20</text>
+  <text class="small" x="260" y="374">30</text>
+  <text class="small" x="326" y="374">40</text>
+  <text class="small" x="392" y="374">50</text>
+  <text class="small" x="458" y="374">60</text>
+  <text class="small" x="524" y="374">70</text>
+  <text class="small" x="590" y="374">80</text>
+  <text class="small" x="656" y="374">90</text>
+  <text class="small" x="720" y="374">100</text>
+
+  <text class="label" x="360" y="408">PWM [%]</text>
+  <text class="label" x="20" y="200" transform="rotate(-90 20 200)">RPM</text>
+
+  <polyline class="up" points="149.2,303.97 182.2,281.85 215.2,263.38 248.2,242.92 281.2,222.71 314.2,209.72 347.2,193.17 380.2,178.4 413.2,161.66 446.2,145.17 479.2,132.12 512.2,121.08 545.2,104.53 578.2,91.54 611.2,78.74 644.2,67.66 677.2,58.31 710.2,47.38 730,41.82" />
+  <polyline class="down" points="730,45.48 697,43.51 664,69.54 631,73.23 598,80.62 565,98.95 532,110.03 499,119.38 466,135.88 433,152.49 400,163.63 367,183.85 334,193.17 301,211.63 268,231.85 235,252.25 202,268.8 169,292.89 136,313.08 103,350 70,350" />
+
+  <circle class="point-up" cx="149.2" cy="303.97" r="4.5" />
+  <circle class="point-up" cx="314.2" cy="209.72" r="4.5" />
+  <circle class="point-up" cx="479.2" cy="132.12" r="4.5" />
+  <circle class="point-up" cx="644.2" cy="67.66" r="4.5" />
+  <circle class="point-up" cx="730" cy="41.82" r="4.5" />
+
+  <circle class="point-down" cx="730" cy="45.48" r="4.5" />
+  <circle class="point-down" cx="565" cy="98.95" r="4.5" />
+  <circle class="point-down" cx="400" cy="163.63" r="4.5" />
+  <circle class="point-down" cx="235" cy="252.25" r="4.5" />
+  <circle class="point-down" cx="70" cy="350" r="4.5" />
+
+  <rect class="legend-box" x="760" y="130" width="76" height="146" rx="12" />
+  <line class="up" x1="776" y1="162" x2="808" y2="162" />
+  <text class="small" x="816" y="166">Up</text>
+  <line class="down" x1="776" y1="194" x2="808" y2="194" />
+  <text class="small" x="816" y="198">Down</text>
+  <line class="marker" x1="776" y1="226" x2="808" y2="226" />
+  <text class="small" x="816" y="230">Hold 10%</text>
+  <line class="marker" x1="776" y1="258" x2="808" y2="258" />
+  <text class="small" x="816" y="262">Start 12%</text>
+
+  <text class="small" x="110" y="46">start PWM 12%</text>
+  <text class="small" x="90" y="64">hold PWM 10%</text>
+  <text class="small" x="638" y="34">max 1252 RPM</text>
+</svg>

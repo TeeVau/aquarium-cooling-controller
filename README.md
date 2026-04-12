@@ -138,8 +138,13 @@ Confirmed on the current bench setup with the Noctua NF-S12A PWM:
 Latest captured artifacts:
 
 - [`docs/result fan test/measurement-summary-2026-04-12.md`](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
+- [`docs/result fan test/fan-curve-chart.svg`](docs/result%20fan%20test/fan-curve-chart.svg)
 - [`docs/result fan test/live-run.txt`](docs/result%20fan%20test/live-run.txt)
 - [`docs/result fan test/live-run-part2.txt`](docs/result%20fan%20test/live-run-part2.txt)
+
+Visualized fan curve:
+
+![Measured fan curve](docs/result%20fan%20test/fan-curve-chart.svg)
 
 ### Planned Production Firmware
 

@@ -24,6 +24,10 @@ Important wiring note:
 | RPM at 5% PWM | `0` |
 | RPM at 100% PWM | `1252` |
 
+## Curve Visualization
+
+![Measured fan curve](./fan-curve-chart.svg)
+
 ## Upward Curve
 
 ```cpp
@@ -78,6 +82,7 @@ FanCurvePoint curve[] = {
 
 ## Source Logs
 
+- [`fan-curve-chart.svg`](./fan-curve-chart.svg)
 - [`live-run.txt`](./live-run.txt)
 - [`live-run-part2.txt`](./live-run-part2.txt)
 - historical comparison:
