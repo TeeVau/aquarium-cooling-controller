@@ -8,6 +8,7 @@ Desktop.ini
 build/
 dist/
 .pio/
+.arduino-build/
 *.bin
 *.elf
 *.map
@@ -16,3 +17,4 @@ dist/
 # Logs / temp
 *.log
 *.tmp
+.codex-*/

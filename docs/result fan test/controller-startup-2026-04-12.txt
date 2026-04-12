@@ -1,0 +1,121 @@
+﻿Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
+Controller scaffold diagnostics:
+  PWM command: 0%
+  Measured RPM: 0
+  Expected RPM: 0
+  Tolerance RPM: +/-0
+  RPM error: 0
+  Plausibility active: no
+  Plausible: yes
+  Fault latched: no
+  Next integration steps: wire fan_driver, rpm_monitor, sensor_manager.
+
