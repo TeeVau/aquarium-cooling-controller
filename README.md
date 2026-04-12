@@ -17,17 +17,20 @@ The current repo already includes:
 - project definition and design notes
 - a Mermaid-based block schematic sketch for draw.io
 - an ESP32 Arduino fan-characterization sketch
+- a first production-controller scaffold with fan PWM, tach RPM monitoring,
+  fan-curve interpolation, and plausibility logic
 - captured serial logs from the first successful fan test runs
 - a PowerShell helper for serial log capture
 
 ## Current Status
 
-The project is in an early architecture and characterization phase.
+The project is in an early production-firmware bring-up phase.
 
 Current focus:
 
-- characterize the selected 4-pin PWM fan
-- define the production firmware architecture
+- turn the measured fan behavior into reusable production firmware modules
+- bring up safe local fan control with real PWM and tach feedback
+- add the first sensor and control modules on top of the hardware scaffold
 - define the central 3D-printed enclosure concept
 - prepare for local control, MQTT, and OTA support
 
@@ -41,6 +44,7 @@ Current focus:
 |  |- aquarium-cooling-controller-fsd.md
 |  |- result fan test/
 |  |  |- measurement-summary-2026-04-12.md
+|  |  |- controller-smoke-test-2026-04-12.md
 |  |  |- live-run.txt
 |  |  `- live-run-part2.txt
 |  `- design/
@@ -49,6 +53,16 @@ Current focus:
 |     |- schematic-sketch.md
 |     `- schematic-sketch.mmd
 |- firmware/
+|  |- controller/
+|  |  |- controller.ino
+|  |  |- fan_curve.cpp
+|  |  |- fan_curve.h
+|  |  |- fan_driver.cpp
+|  |  |- fan_driver.h
+|  |  |- fault_monitor.cpp
+|  |  |- fault_monitor.h
+|  |  |- rpm_monitor.cpp
+|  |  `- rpm_monitor.h
 |  `- fan-test/
 |     `- fan-test.ino
 `- tools/
@@ -63,6 +77,7 @@ Current focus:
 - Schematic sketch notes: [`docs/design/schematic-sketch.md`](docs/design/schematic-sketch.md)
 - Mermaid source for draw.io: [`docs/design/schematic-sketch.mmd`](docs/design/schematic-sketch.mmd)
 - Measurement summary: [`docs/result fan test/measurement-summary-2026-04-12.md`](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
+- Controller smoke test: [`docs/result fan test/controller-smoke-test-2026-04-12.md`](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
 
 ## Hardware Concept
 
@@ -157,6 +172,37 @@ The production controller is intended to provide:
 - MQTT telemetry and remote parameter updates
 - OTA update support via Wi-Fi
 
+### Current Production Firmware Scaffold
+
+The repo now includes a first controller scaffold:
+
+- [`firmware/controller/controller.ino`](firmware/controller/controller.ino)
+- [`firmware/controller/fan_curve.cpp`](firmware/controller/fan_curve.cpp)
+- [`firmware/controller/fan_driver.cpp`](firmware/controller/fan_driver.cpp)
+- [`firmware/controller/rpm_monitor.cpp`](firmware/controller/rpm_monitor.cpp)
+- [`firmware/controller/fault_monitor.cpp`](firmware/controller/fault_monitor.cpp)
+
+What it already does on hardware:
+
+- initializes 25 kHz PWM on `GPIO25`
+- reads fan tach pulses on `GPIO26`
+- applies a start-boost when starting from standstill
+- interpolates expected RPM from the measured fan curve
+- evaluates plausibility only above the configured stable operating region
+- accepts simple serial commands for safe bench testing:
+  - `0..100` to set target PWM
+  - `stop` to force `0%`
+  - `status` to print immediate diagnostics
+  - `help` to show the command list
+
+Latest production-controller bench result:
+
+- controller scaffold compiles and flashes successfully on the ESP32
+- serial diagnostics boot correctly
+- `15%` PWM command starts the fan and settles near the measured curve
+- stop command returns the fan cleanly to `0 RPM`
+- summary: [`docs/result fan test/controller-smoke-test-2026-04-12.md`](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
+
 ## draw.io / Mermaid Workflow
 
 The block schematic can be edited in draw.io:
@@ -168,9 +214,8 @@ The block schematic can be edited in draw.io:
 
 ## Suggested Next Steps
 
-1. Convert the measured fan data into a production-ready fan-curve table and interpolation helper.
-2. Define the first plausibility window above the stable operating region.
-3. Validate the final PWM electrical interface for the production hardware design.
-4. Implement the first production firmware modules around sensors, control, and
-   plausibility checking.
+1. Add the first `sensor_manager` module for the DS18B20 water and air sensors.
+2. Implement a minimal local control loop that maps water temperature to fan PWM.
+3. Tighten plausibility timing and tolerance after a few more in-hardware runs.
+4. Validate the final PWM electrical interface for the production hardware design.
 5. Refine the enclosure geometry and terminal layout for the real installation.
