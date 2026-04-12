@@ -6,15 +6,31 @@
 #include "fan_curve.h"
 #include "fault_monitor.h"
 #include "rpm_monitor.h"
+#include "sensor_manager.h"
 
 namespace {
 
 constexpr uint32_t kDiagnosticsIntervalMs = 2000;
 constexpr size_t kSerialCommandBufferSize = 16;
+constexpr size_t kSensorAddressBufferSize = 17;
+
+constexpr uint8_t kWaterSensorRomCode[8] = {
+    0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB,
+};
+
+constexpr SensorManagerConfig kWaterSensorConfig = {
+    33,
+    2000,
+    12,
+    true,
+    {0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB},
+    "Water sensor",
+};
 
 FanDriver fanDriver;
 RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
+SensorManager sensorManager(kWaterSensorConfig);
 uint32_t lastDiagnosticsMs = 0;
 uint8_t targetPwmPercent = 0;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
@@ -64,7 +80,13 @@ void printCurveSummary() {
   Serial.println("%");
 }
 
-void printDiagnostics(const FaultMonitorSnapshot& snapshot, uint32_t sampleAgeMs) {
+void printDiagnostics(const FaultMonitorSnapshot& snapshot,
+                      uint32_t sampleAgeMs,
+                      uint32_t nowMs) {
+  const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
+  char sensorAddress[kSensorAddressBufferSize] = {};
+  sensorManager.formatPrimaryAddress(sensorAddress, sizeof(sensorAddress));
+
   Serial.println("Controller diagnostics:");
 
   Serial.print("  Target PWM: ");
@@ -102,6 +124,45 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot, uint32_t sampleAgeMs
   Serial.print("  RPM sample age: ");
   Serial.print(sampleAgeMs);
   Serial.println(" ms");
+
+  Serial.print("  ");
+  Serial.print(kWaterSensorConfig.sensorLabel);
+  Serial.print(" pin: GPIO");
+  Serial.println(kWaterSensorConfig.oneWirePin);
+
+  Serial.print("  Sensors found: ");
+  Serial.println(sensorSnapshot.discoveredSensorCount);
+
+  Serial.print("  1-Wire presence pulse: ");
+  Serial.println(sensorSnapshot.presenceDetected ? "yes" : "no");
+
+  Serial.print("  Configured ROM match: ");
+  Serial.println(sensorSnapshot.configuredAddressMatched ? "yes" : "no");
+
+  Serial.print("  Active sensor ROM: ");
+  Serial.println(sensorAddress);
+
+  Serial.print("  Sensor sample valid: ");
+  Serial.println(sensorSnapshot.sampleValid ? "yes" : "no");
+
+  Serial.print("  Sensor conversion pending: ");
+  Serial.println(sensorSnapshot.conversionPending ? "yes" : "no");
+
+  Serial.print("  Sensor temperature: ");
+  if (sensorSnapshot.sampleValid) {
+    Serial.print(sensorSnapshot.temperatureC, 2);
+    Serial.println(" C");
+  } else {
+    Serial.println("unavailable");
+  }
+
+  Serial.print("  Sensor sample age: ");
+  if (sensorSnapshot.sampleValid) {
+    Serial.print(nowMs - sensorSnapshot.lastSampleMs);
+    Serial.println(" ms");
+  } else {
+    Serial.println("n/a");
+  }
 
   Serial.println();
 }
@@ -176,6 +237,10 @@ void setup() {
 
   const bool fanReady = fanDriver.begin();
   const bool rpmReady = rpmMonitor.begin();
+  const bool sensorBusReady = sensorManager.begin(millis());
+  const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
+  char sensorAddress[kSensorAddressBufferSize] = {};
+  sensorManager.formatPrimaryAddress(sensorAddress, sizeof(sensorAddress));
 
   Serial.println();
   Serial.println("Aquarium cooling controller");
@@ -184,6 +249,22 @@ void setup() {
   Serial.println(fanReady ? "ok" : "failed");
   Serial.print("RPM monitor init: ");
   Serial.println(rpmReady ? "ok" : "failed");
+  Serial.print("Sensor bus init: ");
+  Serial.println(sensorBusReady ? "ok" : "failed");
+  Serial.print("Water sensor GPIO: ");
+  Serial.println(kWaterSensorConfig.oneWirePin);
+  Serial.print("Detected sensors: ");
+  Serial.println(sensorSnapshot.discoveredSensorCount);
+  Serial.print("Configured water sensor ROM: ");
+  for (size_t i = 0; i < sizeof(kWaterSensorRomCode); ++i) {
+    if (kWaterSensorRomCode[i] < 0x10) {
+      Serial.print('0');
+    }
+    Serial.print(kWaterSensorRomCode[i], HEX);
+  }
+  Serial.println();
+  Serial.print("Active sensor ROM: ");
+  Serial.println(sensorAddress);
   printCurveSummary();
   printHelp();
 }
@@ -195,6 +276,7 @@ void loop() {
   fanDriver.setCommandedPwmPercent(targetPwmPercent, nowMs);
   fanDriver.update(nowMs);
   rpmMonitor.update(nowMs);
+  sensorManager.update(nowMs);
 
   if (nowMs - lastDiagnosticsMs < kDiagnosticsIntervalMs) {
     return;
@@ -205,5 +287,5 @@ void loop() {
   const FaultMonitorSnapshot snapshot =
       faultMonitor.evaluate(fanDriver.appliedPwmPercent(), rpmMonitor.rpm(), nowMs);
 
-  printDiagnostics(snapshot, rpmMonitor.sampleAgeMs(nowMs));
+  printDiagnostics(snapshot, rpmMonitor.sampleAgeMs(nowMs), nowMs);
 }
