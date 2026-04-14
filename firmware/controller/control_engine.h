@@ -9,6 +9,11 @@ struct ControlConfig {
   uint8_t fallbackPwmPercent;
   float coolingStartDeltaC;
   float fullCoolingDeltaC;
+  bool airAssistEnabled;
+  float airAssistStartTemperatureC;
+  float airAssistFullTemperatureC;
+  uint8_t airAssistMinimumPwmPercent;
+  uint8_t airAssistMaximumPwmPercent;
 };
 
 struct ControlInputs {
@@ -22,6 +27,7 @@ struct ControlInputs {
 
 enum class ControlMode : uint8_t {
   kWaterControl,
+  kWaterControlWithAirAssist,
   kWaterSensorFallback,
 };
 
@@ -46,6 +52,11 @@ constexpr ControlConfig kDefaultControlConfig = {
     40,
     0.20f,
     3.00f,
+    true,
+    26.0f,
+    30.0f,
+    20,
+    45,
 };
 
 namespace ControlEngine {

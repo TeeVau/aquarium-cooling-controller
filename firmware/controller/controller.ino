@@ -60,6 +60,7 @@ void printHelp() {
   Serial.println("  status        -> print diagnostics immediately");
   Serial.println("  target <c>    -> set target water temperature in C");
   Serial.println("  default       -> reset target temperature to default 23.0 C");
+  Serial.println("  airassist     -> print current air-assist defaults");
   Serial.println("  help          -> show this help");
   Serial.println();
 }
@@ -224,6 +225,13 @@ void printControlDetails() {
   Serial.print(lastControlSnapshot.airBasedPwmPercent);
   Serial.println("%");
 
+  Serial.print("  Air assist enabled: ");
+  Serial.println(kDefaultControlConfig.airAssistEnabled ? "yes" : "no");
+
+  Serial.print("  Air assist threshold: ");
+  Serial.print(kDefaultControlConfig.airAssistStartTemperatureC, 2);
+  Serial.println(" C");
+
   Serial.print("  Final target PWM: ");
   Serial.print(lastControlSnapshot.finalPwmPercent);
   Serial.println("%");
@@ -300,6 +308,23 @@ void handleSerialCommand(const char* command) {
   if (strcmp(command, "status") == 0) {
     lastDiagnosticsMs = 0;
     Serial.println("Status refresh requested.");
+    return;
+  }
+
+  if (strcmp(command, "airassist") == 0) {
+    Serial.print("Air assist enabled: ");
+    Serial.println(kDefaultControlConfig.airAssistEnabled ? "yes" : "no");
+    Serial.print("Air assist start temperature: ");
+    Serial.print(kDefaultControlConfig.airAssistStartTemperatureC, 2);
+    Serial.println(" C");
+    Serial.print("Air assist full temperature: ");
+    Serial.print(kDefaultControlConfig.airAssistFullTemperatureC, 2);
+    Serial.println(" C");
+    Serial.print("Air assist PWM range: ");
+    Serial.print(kDefaultControlConfig.airAssistMinimumPwmPercent);
+    Serial.print("% .. ");
+    Serial.print(kDefaultControlConfig.airAssistMaximumPwmPercent);
+    Serial.println("%");
     return;
   }
 
@@ -412,6 +437,14 @@ void setup() {
   Serial.println(" C");
   Serial.print("Water sensor fault fallback PWM: ");
   Serial.print(kDefaultControlConfig.fallbackPwmPercent);
+  Serial.println("%");
+  Serial.print("Air assist start temperature: ");
+  Serial.print(kDefaultControlConfig.airAssistStartTemperatureC, 2);
+  Serial.println(" C");
+  Serial.print("Air assist PWM range: ");
+  Serial.print(kDefaultControlConfig.airAssistMinimumPwmPercent);
+  Serial.print("% .. ");
+  Serial.print(kDefaultControlConfig.airAssistMaximumPwmPercent);
   Serial.println("%");
   printTrackedSensorDetails(sensorSnapshot, millis());
   printDiscoveredBusSensors(sensorSnapshot);

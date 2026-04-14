@@ -24,6 +24,30 @@ uint8_t computeWaterBasedPwm(float waterDeltaC, const ControlConfig& config) {
   return (uint8_t)roundf(constrain(pwmValue, 0.0f, 100.0f));
 }
 
+uint8_t computeAirBasedPwm(float airTemperatureC, const ControlConfig& config) {
+  if (!config.airAssistEnabled || !isfinite(airTemperatureC) ||
+      airTemperatureC < config.airAssistStartTemperatureC) {
+    return 0;
+  }
+
+  if (airTemperatureC >= config.airAssistFullTemperatureC) {
+    return config.airAssistMaximumPwmPercent;
+  }
+
+  const float assistSpanC =
+      config.airAssistFullTemperatureC - config.airAssistStartTemperatureC;
+  const float assistPosition =
+      (airTemperatureC - config.airAssistStartTemperatureC) / assistSpanC;
+  const float pwmRange =
+      (float)(config.airAssistMaximumPwmPercent - config.airAssistMinimumPwmPercent);
+  const float pwmValue =
+      config.airAssistMinimumPwmPercent + assistPosition * pwmRange;
+
+  return (uint8_t)roundf(
+      constrain(pwmValue, (float)config.airAssistMinimumPwmPercent,
+                (float)config.airAssistMaximumPwmPercent));
+}
+
 }  // namespace
 
 namespace ControlEngine {
@@ -58,7 +82,9 @@ ControlSnapshot compute(const ControlInputs& inputs, const ControlConfig& config
       snapshot.waterSensorValid ? inputs.waterTemperatureC : NAN;
   snapshot.airSensorValid = inputs.airSensorValid && isfinite(inputs.airTemperatureC);
   snapshot.airTemperatureC = snapshot.airSensorValid ? inputs.airTemperatureC : NAN;
-  snapshot.airBasedPwmPercent = 0;
+  snapshot.airBasedPwmPercent = snapshot.airSensorValid
+                                    ? computeAirBasedPwm(snapshot.airTemperatureC, config)
+                                    : 0;
 
   if (!snapshot.waterSensorValid) {
     snapshot.waterDeltaC = NAN;
@@ -74,8 +100,11 @@ ControlSnapshot compute(const ControlInputs& inputs, const ControlConfig& config
 
   snapshot.waterDeltaC = waterDeltaC;
   snapshot.waterBasedPwmPercent = waterBasedPwmPercent;
-  snapshot.finalPwmPercent = waterBasedPwmPercent;
-  snapshot.mode = ControlMode::kWaterControl;
+  snapshot.finalPwmPercent =
+      max(snapshot.waterBasedPwmPercent, snapshot.airBasedPwmPercent);
+  snapshot.mode = snapshot.airBasedPwmPercent > snapshot.waterBasedPwmPercent
+                      ? ControlMode::kWaterControlWithAirAssist
+                      : ControlMode::kWaterControl;
   return snapshot;
 }
 
@@ -83,6 +112,8 @@ const char* modeLabel(ControlMode mode) {
   switch (mode) {
     case ControlMode::kWaterControl:
       return "water-control";
+    case ControlMode::kWaterControlWithAirAssist:
+      return "water-control+air-assist";
     case ControlMode::kWaterSensorFallback:
       return "water-sensor-fallback";
     default:
