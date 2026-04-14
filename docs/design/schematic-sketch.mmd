@@ -12,7 +12,7 @@ flowchart LR
         GND["Common GND"]
         ESP["ESP32-DevKitC V4<br/>ESP32-WROOM-32E"]
         V33["3.3 V"]
-        PULL1["4.7k Pull-up<br/>1-Wire to 3.3 V"]
+        PULL1["3.3k Pull-up<br/>1-Wire to 3.3 V"]
         PULL2["3.3k Pull-up<br/>TACH to 3.3 V"]
         PWMIF["PWM Interface Stage<br/>TBD / validate with 4-pin fan"]
 
@@ -22,7 +22,7 @@ flowchart LR
 
         GPIO25["GPIO25<br/>Fan PWM"]
         GPIO26["GPIO26<br/>Fan TACH"]
-        GPIO4["GPIO4<br/>1-Wire Bus"]
+        GPIO33["GPIO33<br/>1-Wire Bus"]
       end
     end
 
@@ -42,9 +42,9 @@ flowchart LR
   V33 --> PULL1
   V33 --> PULL2
 
-  GPIO4 --- PULL1
-  GPIO4 --- TERMSW
-  GPIO4 --- TERMSA
+  GPIO33 --- PULL1
+  GPIO33 --- TERMSW
+  GPIO33 --- TERMSA
 
   GPIO25 --> PWMIF
   PWMIF --> TERMF

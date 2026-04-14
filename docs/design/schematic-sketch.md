@@ -21,7 +21,8 @@ wiring concept for fan, water sensor, and air sensor.
 - The fan PWM interface stage is intentionally marked as `TBD` because the
   exact electrical compatibility with the selected 4-pin fan still needs
   prototype validation.
-- DS18B20 water and air sensors share one 1-Wire bus on GPIO4.
+- DS18B20 water and air sensors share one 1-Wire bus on GPIO33 with a 3.3 kOhm
+  pull-up to 3.3 V in the verified bench setup.
 - Fan PWM is currently assigned to GPIO25.
 - Tach input is currently assigned to GPIO26 and uses a 3.3 kOhm pull-up to
   3.3 V in the verified bench setup.

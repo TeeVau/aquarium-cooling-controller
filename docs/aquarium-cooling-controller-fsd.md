@@ -111,8 +111,8 @@ Runtime interactions:
 | Air sensor | DS18B20 | Secondary air-assist trigger |
 | Power input | USB-C PD trigger requesting 12 V | Single-cable power source |
 | 5 V PSU | Switched-mode 12 V to 5 V supply / buck converter | Controller supply |
-| 1-Wire pull-up | 4.7 kOhm to 3.3 V | Bus biasing |
-| Tach pull-up | 4.7 kOhm to 3.3 V | Open-collector tach input biasing |
+| 1-Wire pull-up | 3.3 kOhm to 3.3 V | Bus biasing in the verified bench setup |
+| Tach pull-up | 3.3 kOhm to 3.3 V | Open-collector tach input biasing in the verified bench setup |
 | Enclosure | 3D-printed housing | Central mechanical integration and mounting |
 | Terminal blocks | Fan, water sensor, air sensor connectors | Field wiring termination |
 
@@ -134,7 +134,7 @@ Pin assignment:
 |---|---:|---|
 | Fan PWM | 25 | 25 kHz PWM output |
 | Fan TACH | 26 | Interrupt-capable input with 3.3 kOhm pull-up to 3.3 V |
-| 1-Wire bus | 4 | Shared bus for both DS18B20 sensors |
+| 1-Wire bus | 33 | Shared bus for both DS18B20 sensors |
 
 Fan connector pinout:
 
@@ -188,8 +188,10 @@ Boot sequence:
 Persistence model:
 
 - Storage backend: ESP32 Preferences / NVS
-- Persisted keys: target temperature, air-assist enable flag,
-  air-assist minimum PWM, optional controller tuning values
+- Current implementation persists the target temperature
+- Invalid persisted target values shall be cleared and replaced with the
+  default target temperature
+- Additional air-assist and tuning values may be added later
 - Sensor role mapping shall use DS18B20 ROM IDs rather than bus order
 
 Update model:
@@ -544,9 +546,10 @@ Dependencies:
 
 | Key | Type | Description |
 |---|---|---|
-| `target_temperature_c` | float | Desired water temperature |
-| `air_assist_enabled` | bool | Enable under-lid air-assist logic |
-| `air_assist_min_pwm_percent` | uint8_t | Minimum PWM when air-assist is active |
+| `target_c` | float | Desired water temperature |
+| `target_set` | bool | Marks whether a custom target temperature is stored |
+| `air_assist_enabled` | bool | Planned later: enable under-lid air-assist logic |
+| `air_assist_min_pwm_percent` | uint8_t | Planned later: minimum PWM when air-assist is active |
 | `control_mode` | enum | `auto`, optional `manual_override`, `fault_mode` |
 
 #### Diagnostics Payload
@@ -562,10 +565,22 @@ Dependencies:
 
 ### 6.4 Commands / Opcodes
 
-The system does not define a custom binary command protocol. Production command
-inputs are represented by validated MQTT set topics, OTA metadata requests, and
-firmware-image download transactions over Wi-Fi. Characterization mode is fully
-automatic with no runtime command input.
+The system does not define a custom binary command protocol. The current local
+controller exposes a small text-based USB serial service interface for bench
+operation and diagnostics:
+
+| Command | Purpose |
+|---|---|
+| `status` | Print an immediate diagnostics block |
+| `target <c>` | Set and persist a custom water target temperature |
+| `default` | Clear persisted target and return to the default `23.0 C` |
+| `airassist` | Print the current air-assist defaults |
+| `help` | Print the supported command list |
+
+Future production command inputs may additionally be represented by validated
+MQTT set topics, OTA metadata requests, and firmware-image download
+transactions over Wi-Fi. Characterization mode remains fully automatic with no
+runtime command input.
 
 ## 7. Operational Procedures
 
@@ -685,6 +700,13 @@ automatic with no runtime command input.
 
 ### 8.4 Traceability Matrix
 
+Status interpretation in this matrix:
+
+- `Covered`: completed and verified in the current project phase
+- `Bench-verified`: implemented and verified on the current bench setup
+- `Implemented`: present in firmware but not yet fully validated in the final installation context
+- `Planned`: specified but not yet implemented or verified
+
 | Requirement | Priority | Test Case(s) | Status |
 |---|---|---|---|
 | FR-1.1 | Must | TC-P1-01 | Covered |
@@ -693,53 +715,53 @@ automatic with no runtime command input.
 | FR-1.4 | Must | TC-P1-04 | Covered |
 | FR-1.5 | Must | TC-P1-05 | Covered |
 | FR-1.6 | Must | TC-P1-06 | Covered |
-| FR-2.1 | Must | TC-P2-01 | Covered |
-| FR-2.2 | Must | TC-P2-01 | Covered |
-| FR-2.3 | Must | TC-P2-02 | Covered |
-| FR-2.4 | Must | TC-P2-03 | Covered |
-| FR-2.5 | Must | TC-P2-04 | Covered |
-| FR-2.6 | Should | TC-P2-02 | Covered |
-| FR-2.7 | Must | TC-P2-02, TC-P2-06 | Covered |
-| FR-2.8 | Must | TC-P2-06 | Covered |
-| FR-2.9 | Must | TC-P2-05, AT-02 | Covered |
-| FR-2.10 | Must | TC-P2-05 | Covered |
-| FR-2.11 | Must | AT-01, AT-02 | Covered |
-| FR-2.12 | Must | TC-P2-15, AT-08 | Covered |
-| FR-2.13 | Must | TC-P2-16, AT-08 | Covered |
-| FR-2.14 | Should | TC-P2-15, TC-P2-16, AT-08 | Covered |
-| FR-3.1 | Must | TC-P2-07, AT-05 | Covered |
-| FR-3.2 | Must | TC-P2-07, AT-05 | Covered |
-| FR-3.3 | Must | TC-P2-07 | Covered |
-| FR-3.4 | Must | TC-P2-07, AT-03 | Covered |
-| FR-3.5 | Must | TC-P2-08 | Covered |
-| FR-3.6 | Must | TC-P2-09 | Covered |
-| FR-3.7 | Should | TC-P2-10 | Covered |
-| FR-4.1 | Must | AT-03 | Covered |
-| FR-4.2 | Must | AT-04 | Covered |
-| FR-4.3 | Should | AT-04 | Covered |
-| FR-4.4 | Must | AT-06, AT-07 | Covered |
-| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-06 | Covered |
-| FR-4.6 | Must | AT-06, AT-07 | Covered |
-| FR-4.7 | Must | AT-07 | Covered |
-| FR-4.8 | Should | AT-06, AT-07 | Covered |
-| NFR-1.1 | Must | AT-01 | Covered |
-| NFR-1.2 | Must | TC-P2-02, AT-05 | Covered |
-| NFR-1.3 | Must | TC-P2-05, AT-02 | Covered |
-| NFR-1.4 | Must | TC-P2-02, TC-P2-07 | Covered |
-| NFR-1.5 | Must | TC-P2-11 | Covered |
-| NFR-1.6 | Should | TC-P2-12 | Covered |
-| NFR-1.7 | Must | TC-P2-07, TC-P2-08, TC-P2-09, AT-03 | Covered |
-| NFR-1.8 | Should | TC-P2-13, AT-01, AT-02 | Covered |
+| FR-2.1 | Must | TC-P2-01 | Bench-verified |
+| FR-2.2 | Must | TC-P2-01 | Bench-verified |
+| FR-2.3 | Must | TC-P2-02 | Bench-verified |
+| FR-2.4 | Must | TC-P2-03 | Bench-verified |
+| FR-2.5 | Must | TC-P2-04 | Bench-verified |
+| FR-2.6 | Should | TC-P2-02 | Bench-verified |
+| FR-2.7 | Must | TC-P2-02, TC-P2-06 | Bench-verified |
+| FR-2.8 | Must | TC-P2-06 | Bench-verified |
+| FR-2.9 | Must | TC-P2-05, AT-02 | Bench-verified |
+| FR-2.10 | Must | TC-P2-05 | Bench-verified |
+| FR-2.11 | Must | AT-01, AT-02 | Bench-verified |
+| FR-2.12 | Must | TC-P2-15, AT-08 | Planned |
+| FR-2.13 | Must | TC-P2-16, AT-08 | Planned |
+| FR-2.14 | Should | TC-P2-15, TC-P2-16, AT-08 | Planned |
+| FR-3.1 | Must | TC-P2-07, AT-05 | Bench-verified |
+| FR-3.2 | Must | TC-P2-07, AT-05 | Bench-verified |
+| FR-3.3 | Must | TC-P2-07 | Bench-verified |
+| FR-3.4 | Must | TC-P2-07, AT-03 | Bench-verified |
+| FR-3.5 | Must | TC-P2-08 | Implemented |
+| FR-3.6 | Must | TC-P2-09 | Implemented |
+| FR-3.7 | Should | TC-P2-10 | Implemented |
+| FR-4.1 | Must | AT-03 | Planned |
+| FR-4.2 | Must | AT-04 | Planned |
+| FR-4.3 | Should | AT-04 | Planned |
+| FR-4.4 | Must | AT-06, AT-07 | Planned |
+| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-06 | Planned |
+| FR-4.6 | Must | AT-06, AT-07 | Planned |
+| FR-4.7 | Must | AT-07 | Planned |
+| FR-4.8 | Should | AT-06, AT-07 | Planned |
+| NFR-1.1 | Must | AT-01 | Bench-verified |
+| NFR-1.2 | Must | TC-P2-02, AT-05 | Bench-verified |
+| NFR-1.3 | Must | TC-P2-05, AT-02 | Bench-verified |
+| NFR-1.4 | Must | TC-P2-02, TC-P2-07 | Bench-verified |
+| NFR-1.5 | Must | TC-P2-11 | Implemented |
+| NFR-1.6 | Should | TC-P2-12 | Implemented |
+| NFR-1.7 | Must | TC-P2-07, TC-P2-08, TC-P2-09, AT-03 | Bench-verified |
+| NFR-1.8 | Should | TC-P2-13, AT-01, AT-02 | Implemented |
 | NFR-1.9 | Must | TC-P1-01 | Covered |
-| NFR-1.10 | Must | TC-P2-14, AT-01 | Covered |
-| NFR-1.11 | Must | AT-06, AT-07 | Covered |
+| NFR-1.10 | Must | TC-P2-14, AT-01 | Planned |
+| NFR-1.11 | Must | AT-06, AT-07 | Planned |
 
 ## 9. Troubleshooting Guide
 
 | Symptom | Likely Cause | Diagnostic Steps | Corrective Action |
 |---|---|---|---|
 | Fan does not start at low PWM | Start threshold too low or PWM interface incompatible | Run characterization and inspect start PWM result | Increase start-boost or validate PWM electrical stage |
-| RPM reads zero while fan spins | Tach wiring or pull-up problem | Check GPIO 19 signal, pull-up, and common ground | Correct wiring and confirm pulse measurement |
+| RPM reads zero while fan spins | Tach wiring or pull-up problem | Check GPIO26 signal, pull-up, and common ground | Correct wiring and confirm pulse measurement |
 | Water and air temperature appear swapped | DS18B20 roles assigned by bus order instead of ROM ID | Print detected ROM IDs and compare to configured mapping | Reassign and persist correct ROM-ID mapping |
 | False fan faults near low PWM | Unstable tach region below stable operating range | Compare measured RPM to stable hold PWM region | Exclude low-PWM region or widen tolerance there |
 | Cooling stops after water sensor issue | Fallback behavior not configured or not applied correctly | Inspect fault logs and safe fallback branch | Implement and verify defined safe fallback PWM |
@@ -792,7 +814,7 @@ automatic with no runtime command input.
 | Fan PWM | ESP32 GPIO25 -> fan pin 4 (PWM) |
 | Fan TACH | fan pin 3 (TACH) -> ESP32 GPIO26 |
 | Fan Power | fan pin 2 -> +12 V, fan pin 1 -> GND |
-| DS18B20 bus | ESP32 GPIO4 shared 1-Wire bus with 4.7 kOhm pull-up to 3.3 V |
+| DS18B20 bus | ESP32 GPIO33 shared 1-Wire bus with 3.3 kOhm pull-up to 3.3 V |
 
 ### E. Verified Fan Characterization Result
 

@@ -7,7 +7,7 @@
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "test-and-characterization phase before production firmware"
+    "project_status": "bench-verified local control firmware with water control, air-assist, and target persistence"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -87,8 +87,8 @@
       "goal": "Compact single-cable supply using an already available USB-C PD power supply"
     },
     "supporting_components": {
-      "onewire_pullup": "4.7k resistor to 3.3V",
-      "tach_pullup": "4.7k resistor to 3.3V",
+      "onewire_pullup": "3.3k resistor to 3.3V",
+      "tach_pullup": "3.3k resistor to 3.3V",
       "fan_pwm_driver_note": "Final hardware design must ensure PWM signal is electrically compatible with 4-pin fan control input",
       "fan_tach_note": "Tach input must be handled as open-collector/open-drain style feedback"
     }
@@ -96,7 +96,7 @@
   "pinout": {
     "fan_pwm": 25,
     "fan_tach": 26,
-    "onewire_bus": 4,
+    "onewire_bus": 33,
     "notes": [
       "Common ground between ESP32 and fan power supply is mandatory",
       "Tach input uses pull-up to 3.3V",
@@ -135,10 +135,11 @@
     "persistence": {
       "storage_backend": "ESP32 Preferences / NVS",
       "must_persist": [
-        "target_temperature_c",
-        "air_assist_enabled",
-        "air_assist_min_pwm_percent",
-        "optional additional controller parameters"
+        "target_c",
+        "target_set",
+        "future: air_assist_enabled",
+        "future: air_assist_min_pwm_percent",
+        "future: optional additional controller parameters"
       ],
       "boot_behavior": [
         "Load persisted values at startup",
@@ -158,7 +159,7 @@
         "Further above target: gradually increase PWM",
         "Critical temperature range: high PWM / emergency behavior"
       ],
-      "note": "Final mapping will be tuned after fan characterization"
+      "note": "Bench-ready mapping is implemented; final tuning should use live aquarium data"
     },
     "air_assist": {
       "purpose": "Remove hot air trapped under the lid due to the LED lighting",
@@ -265,7 +266,7 @@
     "fan_plausibility_failure": {
       "policy": "Treat as fan fault",
       "user_rule": "Any confirmed RPM deviation outside the allowed tolerance band is a fault",
-      "reaction_to_be_finalized": "At minimum publish/record error; final production reaction still to be decided explicitly"
+      "reaction_to_be_finalized": "At minimum publish/record error; final production reaction still needs explicit definition before production release"
     },
     "wifi_mqtt_failure": {
       "policy": "No impact on local cooling control; last persisted settings remain active"
@@ -338,14 +339,13 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "Use the automatic fan characterization sketch as the active work artifact",
+    "current_task": "Stabilize and document the first local controller milestone before MQTT/OTA work",
     "next_expected_tasks": [
-      "Refine and improve the fan test sketch if needed",
-      "Parse and organize measured curve results",
-      "Generate production-ready fan curve structures",
-      "Implement interpolation helper for expected RPM",
-      "Implement plausibility checker with tolerance and debounce",
-      "Build production firmware for aquarium cooling controller"
+        "Refine the remaining fault policy for sensor and fan errors",
+        "Tune water and air control behavior with live aquarium data",
+        "Add MQTT telemetry and remote configuration",
+        "Add OTA support",
+        "Finalize enclosure and wiring for the installed system"
     ],
     "instructions_for_codex": [
       "Preserve the architectural rule that critical temperature control runs locally on the ESP32",
