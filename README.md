@@ -1,10 +1,11 @@
 # Aquarium Cooling Controller
 
-![Status](https://img.shields.io/badge/status-experimental-orange)
+![Status](https://img.shields.io/badge/status-bench--verified-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-ESP32-blue)
 ![Firmware](https://img.shields.io/badge/firmware-Arduino-green)
+![Control](https://img.shields.io/badge/control-local-important)
 
-ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, measured PWM-to-RPM characterization, tach-based plausibility monitoring, DS18B20 water and air sensing, and planned MQTT and OTA support.
+ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and a clear upgrade path toward MQTT and OTA.
 
 ## Table of Contents
 
@@ -12,10 +13,10 @@ ESP32-based aquarium cooling controller for a covered tank with local autonomous
 - [Current Status](#current-status)
 - [Features](#features)
 - [Hardware](#hardware)
-- [Pin Mapping](#pin-mapping)
+- [Wiring and Pin Mapping](#wiring-and-pin-mapping)
 - [Repository Layout](#repository-layout)
 - [Software Dependencies](#software-dependencies)
-- [Installation](#installation)
+- [Build and Flash](#build-and-flash)
 - [Usage](#usage)
 - [Bench Results](#bench-results)
 - [Troubleshooting](#troubleshooting)
@@ -26,58 +27,64 @@ ESP32-based aquarium cooling controller for a covered tank with local autonomous
 
 ## Overview
 
-This project is building a compact cooling controller for an aquarium with a lid-mounted PWM fan and two DS18B20 temperature sensors. The core design goal is to keep cooling logic local on the ESP32 so the system remains useful even when Wi-Fi, MQTT, or update infrastructure is unavailable.
+This project controls aquarium cooling with a 4-pin PWM fan and two DS18B20 sensors:
 
-The repo currently covers both the characterization phase and the first production-controller bring-up phase. The selected fan has already been measured on real hardware, and the measured curve is now reused in the current controller firmware for expected RPM interpolation and plausibility diagnostics.
+- one fixed water sensor for the main control variable
+- one fixed air sensor for warm-air assist under the lid
+
+The main design rule is that cooling must continue to work locally on the ESP32 even when Wi-Fi, MQTT, or OTA services are unavailable. The controller therefore keeps sensing, target validation, PWM generation, RPM measurement, and fault handling on the device itself.
+
+The repository currently contains both:
+
+- a completed fan-characterization workflow for the selected Noctua fan
+- a bench-verified first local controller milestone with water control, air-assist, and persisted target temperature
 
 ## Current Status
 
-The project is in the first usable production-firmware stage.
+The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
-Already done:
+Implemented and bench-verified:
 
-- Characterized the selected 4-pin PWM fan on an ESP32 bench setup
-- Measured usable start, hold, and full-scale RPM points
-- Added a reusable fan-curve module with interpolation
-- Added a local controller with:
-  - PWM output on the real fan pin
-  - tachometer RPM measurement
-  - start-boost behavior
-  - plausibility diagnostics against the measured curve
-  - DS18B20 bus bring-up with fixed ROM-ID assignment for water and air sensors
-  - local water-temperature control
-  - local air-assist control via `max(water, air)`
-  - persisted target temperature in ESP32 Preferences/NVS
-  - default and error fallback target of `23.0 C`
+- PWM fan drive on the real output pin
+- tachometer RPM measurement
+- start-boost for reliable fan startup
+- measured PWM-to-RPM interpolation for plausibility checks
+- shared 1-Wire bus on `GPIO33`
+- fixed ROM-ID assignment for water and air sensors
+- local water-temperature control
+- local air-assist control using `max(water_based_pwm, air_based_pwm)`
+- target temperature persistence in ESP32 Preferences / NVS
+- strict default and fallback target temperature of `23.0 C`
+- serial diagnostics with sensor, fan, and alarm information
 
-Current focus:
+Still intentionally open:
 
-- Refine the remaining fault-reaction policy on real hardware
-- Tune control behavior later with live aquarium data
-- Prepare the path for MQTT telemetry and OTA updates
+- final fault policy for confirmed fan faults
+- real-aquarium tuning of water and air control behavior
+- MQTT telemetry and remote configuration
+- OTA update path
 
 ## Features
 
 Implemented now:
 
-- Real fan characterization sketch for a 4-pin PWM fan
-- Production controller with live hardware PWM and tach feedback
-- Linear interpolation from measured PWM-to-RPM curve data
-- Safe start-boost from standstill
-- Serial diagnostics for bench bring-up and service checks
-- Shared 1-Wire DS18B20 bus on real hardware
-- Fixed ROM-ID assignment for one water sensor and one air sensor
-- Water-temperature based local control with default target `23.0 C`
-- Air-assist control path based on the assigned air sensor
-- Target temperature persistence in ESP32 Preferences/NVS
-- Clearer alarm and sensor-health diagnostics
+- Local autonomous control on ESP32 without network dependency
+- Fan characterization sketch for the selected 4-pin PWM fan
+- Measured fan curve reused in production firmware
+- Water-temperature based control with default target `23.0 C`
+- Air-assist based on lid air temperature
+- Fixed DS18B20 role mapping by ROM ID instead of bus order
+- Target temperature persistence across reboot
+- Safe fallback to `23.0 C` for invalid or missing target values
+- Tach plausibility diagnostics against the measured fan curve
+- Serial service commands for diagnostics and bench operation
 
 Planned next:
 
-- Fault-policy refinement for sensor and fan errors
-- Aquarium-side tuning with live temperature data
+- refined sensor and fan fault reaction policy
+- aquarium-side control tuning with live operating data
 - MQTT telemetry and remote parameter updates
-- OTA updates over Wi-Fi
+- OTA firmware updates over Wi-Fi
 
 ## Hardware
 
@@ -85,12 +92,12 @@ Bench hardware used so far:
 
 | Component | Quantity | Purpose | Notes |
 |---|---:|---|---|
-| ESP32 Dev Board | 1 | Main controller | Bench-tested with `esp32:esp32:esp32` target |
+| ESP32 Dev Board | 1 | Main controller | Bench-tested with `esp32:esp32:esp32` |
 | Noctua NF-S12A PWM | 1 | Cooling actuator | 120 mm 4-pin PWM fan |
-| DS18B20 | 2 | Water and air temperature | Bench-verified on shared 1-Wire bus |
+| DS18B20 | 2 | Water and air temperature sensing | Shared 1-Wire bus |
 | 12 V supply | 1 | Fan power | Common ground with ESP32 is mandatory |
-| Tach pull-up resistor | 1 | Tach input biasing | Bench-verified at `3.3 kOhm` to `3.3 V` |
-| 1-Wire pull-up resistor | 1 | DS18B20 bus biasing | Bench-verified at `3.3 kOhm` to `3.3 V` |
+| `3.3 kOhm` pull-up | 1 | Tach input biasing | To `3.3 V` |
+| `3.3 kOhm` pull-up | 1 | 1-Wire bus biasing | To `3.3 V` |
 
 Planned production hardware concept:
 
@@ -102,17 +109,17 @@ Planned production hardware concept:
 | 3D-printed enclosure | Centralized electronics housing |
 | Terminal blocks | Fan and sensor wiring termination |
 
-## Pin Mapping
+## Wiring and Pin Mapping
 
 Current bench mapping:
 
 | Function | ESP32 GPIO | Notes |
 |---|---:|---|
 | Fan PWM | 25 | 25 kHz PWM output |
-| Fan TACH | 26 | Tach input with pull-up |
-| 1-Wire bus | 33 | Bench-verified shared DS18B20 bus with `3.3 kOhm` pull-up |
+| Fan TACH | 26 | Tach input with `3.3 kOhm` pull-up |
+| 1-Wire bus | 33 | Shared DS18B20 bus with `3.3 kOhm` pull-up |
 
-Standard 4-pin PWM fan connector:
+Fan connector reference:
 
 | Fan Pin | Signal | Typical Color | Project Connection |
 |---|---|---|---|
@@ -121,13 +128,20 @@ Standard 4-pin PWM fan connector:
 | 3 | TACH | Green | ESP32 tach input |
 | 4 | PWM | Blue | ESP32 PWM output stage |
 
-Important bench note:
+Verified DS18B20 cable colors for the currently used potted sensors:
 
-- `ESP32 GND`, fan ground, and the 12 V supply ground must share a common reference or the measurements become invalid.
-- Verified DS18B20 cable colors for the currently used potted sensors:
-  - `rot` -> `3.3 V`
-  - `gelb` -> `GND`
-  - `gruen` -> `DATA`
+| Sensor Wire | Function |
+|---|---|
+| `rot` | `3.3 V` |
+| `gelb` | `GND` |
+| `gruen` | `DATA` |
+
+Important notes:
+
+- `ESP32 GND`, fan ground, and the `12 V` supply ground must share a common reference.
+- Water sensor ROM: `28333844050000CB`
+- Air sensor ROM: `28244644050000DA`
+- A block-level wiring sketch is available in [docs/design/schematic-sketch.md](docs/design/schematic-sketch.md).
 
 ## Repository Layout
 
@@ -136,6 +150,7 @@ Important bench note:
 |- README.md
 |- docs/
 |  |- aquarium-cooling-controller-fsd.md
+|  |- sensor-bringup-2026-04-12.md
 |  |- design/
 |  `- result fan test/
 |- firmware/
@@ -146,13 +161,12 @@ Important bench note:
 
 Key files:
 
-- Functional specification: [`docs/aquarium-cooling-controller-fsd.md`](docs/aquarium-cooling-controller-fsd.md)
-- Sensor bring-up summary: [`docs/sensor-bringup-2026-04-12.md`](docs/sensor-bringup-2026-04-12.md)
-- Fan characterization summary: [`docs/result fan test/measurement-summary-2026-04-12.md`](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
-- Controller smoke test: [`docs/result fan test/controller-smoke-test-2026-04-12.md`](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
-- Characterization sketch: [`firmware/fan-test/fan-test.ino`](firmware/fan-test/fan-test.ino)
-- Production controller: [`firmware/controller/controller.ino`](firmware/controller/controller.ino)
-- Serial capture helper: [`tools/serial-capture.ps1`](tools/serial-capture.ps1)
+- FSD: [docs/aquarium-cooling-controller-fsd.md](docs/aquarium-cooling-controller-fsd.md)
+- Sensor bring-up notes: [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
+- Fan measurement summary: [docs/result fan test/measurement-summary-2026-04-12.md](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
+- Controller firmware: [firmware/controller/controller.ino](firmware/controller/controller.ino)
+- Fan characterization sketch: [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino)
+- Serial capture helper: [tools/serial-capture.ps1](tools/serial-capture.ps1)
 
 ## Software Dependencies
 
@@ -160,95 +174,99 @@ Required tools:
 
 - [Arduino IDE](https://www.arduino.cc/en/software) 2.x or compatible `arduino-cli`
 - ESP32 board package for Arduino
-- Arduino libraries `OneWire` and `DallasTemperature`
 - PowerShell on Windows for the serial capture helper
 
-Recommended Arduino board package URL:
+Required Arduino libraries:
+
+| Library | Purpose | Install via |
+|---|---|---|
+| `OneWire` | Shared DS18B20 bus transport | Arduino Library Manager |
+| `DallasTemperature` | DS18B20 sensor handling | Arduino Library Manager |
+
+Recommended ESP32 board package URL:
 
 ```text
 https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 ```
 
-Observed during the latest successful bench run:
+Observed in the latest verified bench run:
 
 - FQBN: `esp32:esp32:esp32`
-- Running firmware reported active ESP32 Arduino core: `3.3.8`
+- ESP32 Arduino core reported at runtime: `3.3.8`
 
-If your Arduino IDE claims a newer ESP32 package is installed, verify what `arduino-cli` is actually using before debugging firmware behavior.
+## Build and Flash
 
-## Installation
-
-### Option 1: Arduino IDE
+### Arduino IDE
 
 1. Install Arduino IDE 2.x.
-2. Add the ESP32 board manager URL in `File -> Preferences`.
-3. Install the `esp32` board package from `Boards Manager`.
-4. Clone this repository:
+2. Add the ESP32 board package URL in `File -> Preferences`.
+3. Install the `esp32` board package in Boards Manager.
+4. Install `OneWire` and `DallasTemperature` in the Library Manager.
+5. Open one of these sketches:
+   - `firmware/fan-test/fan-test.ino`
+   - `firmware/controller/controller.ino`
 
-```bash
-git clone https://github.com/TeeVau/aquarium-cooling-controller.git
-cd aquarium-cooling-controller
-```
+### Arduino CLI
 
-5. Open either:
-   - `firmware/fan-test/fan-test.ino` for characterization work
-   - `firmware/controller/controller.ino` for the current production scaffold
-
-### Option 2: Arduino CLI
-
-Example compile for the controller scaffold:
+Compile the controller:
 
 ```powershell
-& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' compile --fqbn esp32:esp32:esp32 firmware/controller
+& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' compile --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' --output-dir 'build' 'firmware/controller'
 ```
 
-Example upload:
+Upload the controller:
 
 ```powershell
-& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' upload -p COM3 --fqbn esp32:esp32:esp32 firmware/controller
+& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' upload -p COM3 --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' 'firmware/controller'
+```
+
+Capture serial output:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\serial-capture.ps1 -Port COM3 -Baud 115200 -DurationSec 15 -OutputPath 'build\serial-log.txt'
 ```
 
 ## Usage
 
-### 1. Fan Characterization Sketch
+### 1. Fan Characterization
 
-Use [`firmware/fan-test/fan-test.ino`](firmware/fan-test/fan-test.ino) to:
+Use [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino) to:
 
 - detect start PWM from standstill
 - detect minimum hold PWM
 - measure the upward and downward PWM-to-RPM curves
-- print reusable curve data for the controller
+- print reusable curve data for the production controller
 
-### 2. Production Controller
+### 2. Local Controller
 
-Use [`firmware/controller/controller.ino`](firmware/controller/controller.ino) for the current local controller.
+Use [firmware/controller/controller.ino](firmware/controller/controller.ino) for the current controller firmware.
 
 What it does today:
 
-- initializes PWM output and tach measurement
-- initializes a shared DS18B20 bus on `GPIO33`
+- initializes PWM output, tach measurement, and the 1-Wire bus
 - assigns water and air sensors by fixed ROM ID
-- applies local water-temperature based control
-- applies optional air-assist as `max(water_based_pwm, air_based_pwm)`
-- persists a user-set target temperature in Preferences/NVS
-- falls back to `23.0 C` on invalid or missing target values
-- prints the measured fan curve and live diagnostics
+- computes local water-based fan demand
+- computes air-assist fan demand from the air sensor
+- selects `final_pwm = max(water_based_pwm, air_based_pwm)`
+- persists a user-set target temperature in Preferences / NVS
+- falls back to the default target `23.0 C` if the stored or entered target is invalid
+- prints continuous diagnostics including target source, alarm code, sensor health, RPM plausibility, and assigned ROM IDs
 
-Serial commands:
-
-| Command | Effect |
-|---|---|
-| `status` | Print immediate diagnostics |
-| `target <c>` | Set target water temperature in `C` and persist it |
-| `default` | Reset target temperature to the default `23.0 C` |
-| `airassist` | Print the current air-assist defaults |
-| `help` | Show command list |
-
-Expected serial monitor speed:
+Serial monitor:
 
 ```text
 115200 baud
 ```
+
+Current serial service commands:
+
+| Command | Effect |
+|---|---|
+| `status` | Print diagnostics immediately |
+| `target <c>` | Set and persist a custom target temperature |
+| `default` | Clear the stored target and return to `23.0 C` |
+| `airassist` | Print the current air-assist defaults |
+| `help` | Show the command list |
 
 Example session:
 
@@ -260,7 +278,7 @@ default
 
 ## Bench Results
 
-Measured fan behavior on the current bench setup:
+Verified fan characterization for the current Noctua bench setup:
 
 - start PWM from standstill: `12%`
 - minimum hold PWM while spinning: `10%`
@@ -268,67 +286,67 @@ Measured fan behavior on the current bench setup:
 - `5%` PWM: `0 RPM`
 - `100%` PWM: `1252 RPM`
 
-Current controller verification on hardware:
+Verified controller milestone on hardware:
 
 - compile and flash successful
 - fan driver initialization successful
 - RPM monitor initialization successful
-- two DS18B20 sensors detected on the shared 1-Wire bus
-- water sensor ROM fixed at `28333844050000CB`
-- air sensor ROM fixed at `28244644050000DA`
+- both DS18B20 sensors detected on the shared 1-Wire bus
+- water and air sensor ROMs matched correctly
 - default target temperature verified at `23.0 C`
 - invalid target input falls back to `23.0 C`
 - persisted target survives reboot
-- local water control and first air-assist behavior verified on hardware
+- local water control behaves plausibly
+- first air-assist behavior behaves plausibly
 
-Reference artifacts:
+Useful artifacts:
 
-- [`docs/sensor-bringup-2026-04-12.md`](docs/sensor-bringup-2026-04-12.md)
-- [`docs/result fan test/fan-curve-chart.svg`](docs/result%20fan%20test/fan-curve-chart.svg)
-- [`docs/result fan test/controller-startup-2026-04-12.txt`](docs/result%20fan%20test/controller-startup-2026-04-12.txt)
-- [`docs/result fan test/controller-smoke-test-2026-04-12.md`](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
+- [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
+- [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
+- [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
 
 ## Troubleshooting
 
 ### Fan does not react to PWM
 
-- Verify common ground between ESP32, fan, and 12 V supply
-- Check that PWM is on the real fan PWM pin, not tach or 12 V
-- Confirm the board really flashed the intended sketch
+- Verify common ground between ESP32, fan, and `12 V` supply.
+- Check that PWM is wired to the real fan PWM pin.
+- Confirm the intended firmware was actually flashed.
 
 ### RPM stays at zero
 
-- Check tach pull-up to `3.3 V`
-- Verify tach is wired to `GPIO26`
-- Confirm the fan model actually provides tach pulses
+- Check the tach pull-up to `3.3 V`.
+- Verify tach is wired to `GPIO26`.
+- Confirm the fan model really provides tach pulses.
 
-### Upload fails
+### DS18B20 sensors are not detected
 
-- Re-check the selected COM port
-- On ESP32 boards, retry while observing reset/boot timing
-- Verify the Arduino IDE and `arduino-cli` are using the same ESP32 core installation
+- Verify the 1-Wire bus is on `GPIO33`.
+- Check the `3.3 kOhm` pull-up from data to `3.3 V`.
+- Confirm shared ground with the ESP32.
+- Re-check the verified potted-sensor colors: `rot = 3.3 V`, `gelb = GND`, `gruen = DATA`.
 
 ### Target temperature behaves unexpectedly
 
-- Run `status` and inspect `Target source` and `Target defaulted`
-- Use `default` to clear persisted target temperature and return to `23.0 C`
-- If `target <c>` is outside the valid range, the firmware intentionally falls back to `23.0 C`
+- Run `status` and inspect `Target source` and `Target defaulted`.
+- Use `default` to clear persisted target temperature and return to `23.0 C`.
+- If `target <c>` is outside the valid range, the firmware intentionally falls back to `23.0 C`.
 
-### Arduino IDE says one ESP32 version, but runtime shows another
+### Upload fails
 
-- Run `arduino-cli core list`
-- Rebuild and reflash after the board package update
-- Confirm which installation `arduino-cli` is resolving
+- Re-check the selected COM port.
+- Close any open serial monitor that still holds the port.
+- Verify Arduino IDE and `arduino-cli` are using the same ESP32 core installation.
 
 ## Roadmap
 
 Next likely steps:
 
-1. Refine fan and sensor fault reaction policy
-2. Tune water and air control behavior with live aquarium data
-3. Add MQTT telemetry and remote parameter updates
-4. Add OTA support over Wi-Fi
-5. Finalize enclosure and wiring layout for the real aquarium installation
+1. Refine the fault policy for water sensor, air sensor, and confirmed fan faults.
+2. Tune water and air control behavior with live aquarium data.
+3. Add MQTT telemetry and remote parameter updates.
+4. Add OTA support over Wi-Fi.
+5. Finalize enclosure, wiring, and installation layout for the real aquarium.
 
 ## Contributing
 
@@ -338,7 +356,7 @@ If you want to contribute code:
 
 1. Open an issue or describe the intended change first.
 2. Keep hardware assumptions explicit.
-3. Prefer changes that preserve local autonomous operation.
+3. Preserve the rule that critical cooling stays local on the ESP32.
 4. Test on real hardware when a change touches PWM, tach, or sensor handling.
 
 ## License
