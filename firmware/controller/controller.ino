@@ -2,6 +2,7 @@
 
 #include <esp_arduino_version.h>
 
+#include "control_engine.h"
 #include "fan_driver.h"
 #include "fan_curve.h"
 #include "fault_monitor.h"
@@ -11,11 +12,17 @@
 namespace {
 
 constexpr uint32_t kDiagnosticsIntervalMs = 2000;
-constexpr size_t kSerialCommandBufferSize = 16;
+constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
+constexpr size_t kWaterSensorIndex = 0;
+constexpr size_t kAirSensorIndex = 1;
 
 constexpr uint8_t kWaterSensorRomCode[8] = {
     0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB,
+};
+
+constexpr uint8_t kAirSensorRomCode[8] = {
+    0x28, 0x24, 0x46, 0x44, 0x05, 0x00, 0x00, 0xDA,
 };
 
 constexpr SensorManagerConfig kSensorManagerConfig = {
@@ -30,9 +37,9 @@ constexpr SensorManagerConfig kSensorManagerConfig = {
             "Water sensor",
         },
         {
-            false,
-            {0},
-            "Test sensor",
+            true,
+            {0x28, 0x24, 0x46, 0x44, 0x05, 0x00, 0x00, 0xDA},
+            "Air sensor",
         },
     },
 };
@@ -41,17 +48,19 @@ FanDriver fanDriver;
 RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
 SensorManager sensorManager(kSensorManagerConfig);
+ControlSnapshot lastControlSnapshot = {};
 uint32_t lastDiagnosticsMs = 0;
-uint8_t targetPwmPercent = 0;
+float requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
+bool hasConfiguredTargetTemperature = false;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
 
 void printHelp() {
   Serial.println("Serial commands:");
-  Serial.println("  0..100  -> set target PWM percent");
-  Serial.println("  stop    -> set PWM to 0%");
-  Serial.println("  status  -> print current diagnostics immediately");
-  Serial.println("  help    -> show this help");
+  Serial.println("  status        -> print diagnostics immediately");
+  Serial.println("  target <c>    -> set target water temperature in C");
+  Serial.println("  default       -> reset target temperature to default 23.0 C");
+  Serial.println("  help          -> show this help");
   Serial.println();
 }
 
@@ -62,6 +71,17 @@ void printCoreVersion() {
   Serial.print(ESP_ARDUINO_VERSION_MINOR);
   Serial.print(".");
   Serial.println(ESP_ARDUINO_VERSION_PATCH);
+}
+
+void printConfiguredRom(const char* label, const uint8_t romCode[8]) {
+  Serial.print(label);
+  for (size_t i = 0; i < 8; ++i) {
+    if (romCode[i] < 0x10) {
+      Serial.print('0');
+    }
+    Serial.print(romCode[i], HEX);
+  }
+  Serial.println();
 }
 
 void printCurveSummary() {
@@ -177,16 +197,45 @@ void printDiscoveredBusSensors(const SensorSnapshot& sensorSnapshot) {
   }
 }
 
+void printControlDetails() {
+  Serial.print("  Control mode: ");
+  Serial.println(ControlEngine::modeLabel(lastControlSnapshot.mode));
+
+  Serial.print("  Target temperature: ");
+  Serial.print(lastControlSnapshot.targetTemperatureC, 2);
+  Serial.println(" C");
+
+  Serial.print("  Target defaulted: ");
+  Serial.println(lastControlSnapshot.targetDefaulted ? "yes" : "no");
+
+  Serial.print("  Water delta: ");
+  if (lastControlSnapshot.waterSensorValid && isfinite(lastControlSnapshot.waterDeltaC)) {
+    Serial.print(lastControlSnapshot.waterDeltaC, 2);
+    Serial.println(" C");
+  } else {
+    Serial.println("n/a");
+  }
+
+  Serial.print("  Water-based PWM: ");
+  Serial.print(lastControlSnapshot.waterBasedPwmPercent);
+  Serial.println("%");
+
+  Serial.print("  Air-based PWM: ");
+  Serial.print(lastControlSnapshot.airBasedPwmPercent);
+  Serial.println("%");
+
+  Serial.print("  Final target PWM: ");
+  Serial.print(lastControlSnapshot.finalPwmPercent);
+  Serial.println("%");
+}
+
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
                       uint32_t sampleAgeMs,
                       uint32_t nowMs) {
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
 
   Serial.println("Controller diagnostics:");
-
-  Serial.print("  Target PWM: ");
-  Serial.print(targetPwmPercent);
-  Serial.println("%");
+  printControlDetails();
 
   Serial.print("  Applied PWM: ");
   Serial.print(snapshot.commandedPwmPercent);
@@ -248,31 +297,45 @@ void handleSerialCommand(const char* command) {
     return;
   }
 
-  if (strcmp(command, "stop") == 0) {
-    targetPwmPercent = 0;
-    Serial.println("Target PWM set to 0%.");
-    return;
-  }
-
   if (strcmp(command, "status") == 0) {
     lastDiagnosticsMs = 0;
     Serial.println("Status refresh requested.");
     return;
   }
 
-  char* endPtr = nullptr;
-  const long pwmPercent = strtol(command, &endPtr, 10);
-  if (*endPtr != '\0' || pwmPercent < 0 || pwmPercent > 100) {
-    Serial.print("Unknown command: ");
-    Serial.println(command);
-    printHelp();
+  if (strcmp(command, "default") == 0) {
+    requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
+    hasConfiguredTargetTemperature = false;
+    Serial.print("Target temperature reset to default ");
+    Serial.print(requestedTargetTemperatureC, 2);
+    Serial.println(" C.");
     return;
   }
 
-  targetPwmPercent = (uint8_t)pwmPercent;
-  Serial.print("Target PWM set to ");
-  Serial.print(targetPwmPercent);
-  Serial.println("%.");
+  if (strncmp(command, "target ", 7) == 0) {
+    char* endPtr = nullptr;
+    const float parsedTargetTemperatureC = strtof(command + 7, &endPtr);
+    if (*endPtr != '\0' ||
+        !ControlEngine::isTargetTemperatureValid(parsedTargetTemperatureC)) {
+      requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
+      hasConfiguredTargetTemperature = false;
+      Serial.print("Invalid target temperature. Falling back to default ");
+      Serial.print(requestedTargetTemperatureC, 2);
+      Serial.println(" C.");
+      return;
+    }
+
+    requestedTargetTemperatureC = parsedTargetTemperatureC;
+    hasConfiguredTargetTemperature = true;
+    Serial.print("Target temperature set to ");
+    Serial.print(requestedTargetTemperatureC, 2);
+    Serial.println(" C.");
+    return;
+  }
+
+  Serial.print("Unknown command: ");
+  Serial.println(command);
+  printHelp();
 }
 
 void processSerialInput() {
@@ -292,12 +355,28 @@ void processSerialInput() {
 
     if (serialCommandLength + 1 >= kSerialCommandBufferSize) {
       serialCommandLength = 0;
-      Serial.println("Command too long. Try a short command like 35 or stop.");
+      Serial.println("Command too long. Try 'status' or 'target 23.0'.");
       continue;
     }
 
     serialCommandBuffer[serialCommandLength++] = incoming;
   }
+}
+
+ControlInputs buildControlInputs(const SensorSnapshot& sensorSnapshot) {
+  const TrackedSensorSnapshot& waterSensor =
+      sensorSnapshot.trackedSensors[kWaterSensorIndex];
+  const TrackedSensorSnapshot& airSensor =
+      sensorSnapshot.trackedSensors[kAirSensorIndex];
+
+  return {
+      hasConfiguredTargetTemperature,
+      requestedTargetTemperatureC,
+      waterSensor.sampleValid,
+      waterSensor.temperatureC,
+      airSensor.sampleValid,
+      airSensor.temperatureC,
+  };
 }
 
 }  // namespace
@@ -310,6 +389,7 @@ void setup() {
   const bool rpmReady = rpmMonitor.begin();
   const bool sensorBusReady = sensorManager.begin(millis());
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
+  lastControlSnapshot = ControlEngine::compute(buildControlInputs(sensorSnapshot));
 
   Serial.println();
   Serial.println("Aquarium cooling controller");
@@ -322,16 +402,17 @@ void setup() {
   Serial.println(sensorBusReady ? "ok" : "failed");
   Serial.print("1-Wire bus GPIO: ");
   Serial.println(kSensorManagerConfig.oneWirePin);
-  Serial.print("Detected sensors: ");
-  Serial.println(sensorSnapshot.discoveredSensorCount);
-  Serial.print("Configured water sensor ROM: ");
-  for (size_t i = 0; i < sizeof(kWaterSensorRomCode); ++i) {
-    if (kWaterSensorRomCode[i] < 0x10) {
-      Serial.print('0');
-    }
-    Serial.print(kWaterSensorRomCode[i], HEX);
-  }
-  Serial.println();
+  printConfiguredRom("Configured water sensor ROM: ", kWaterSensorRomCode);
+  printConfiguredRom("Configured air sensor ROM: ", kAirSensorRomCode);
+  Serial.print("Default target temperature: ");
+  Serial.print(kDefaultControlConfig.defaultTargetTemperatureC, 2);
+  Serial.println(" C");
+  Serial.print("Fallback target temperature: ");
+  Serial.print(kDefaultControlConfig.defaultTargetTemperatureC, 2);
+  Serial.println(" C");
+  Serial.print("Water sensor fault fallback PWM: ");
+  Serial.print(kDefaultControlConfig.fallbackPwmPercent);
+  Serial.println("%");
   printTrackedSensorDetails(sensorSnapshot, millis());
   printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
@@ -342,10 +423,13 @@ void loop() {
   const uint32_t nowMs = millis();
   processSerialInput();
 
-  fanDriver.setCommandedPwmPercent(targetPwmPercent, nowMs);
+  sensorManager.update(nowMs);
+  const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
+  lastControlSnapshot = ControlEngine::compute(buildControlInputs(sensorSnapshot));
+
+  fanDriver.setCommandedPwmPercent(lastControlSnapshot.finalPwmPercent, nowMs);
   fanDriver.update(nowMs);
   rpmMonitor.update(nowMs);
-  sensorManager.update(nowMs);
 
   if (nowMs - lastDiagnosticsMs < kDiagnosticsIntervalMs) {
     return;
