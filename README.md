@@ -45,11 +45,11 @@ Already done:
   - start-boost behavior
   - plausibility diagnostics against the measured curve
   - serial commands for safe bench testing
+  - DS18B20 bus bring-up with fixed ROM-ID assignment for water and air sensors
 
 Current focus:
 
-- Add the first DS18B20 sensor manager
-- Replace manual PWM test commands with local temperature-based control
+- Replace manual PWM test commands with the first local temperature-based control path
 - Refine plausibility thresholds and timing with more bench data
 - Prepare the path for MQTT telemetry and OTA updates
 
@@ -62,6 +62,8 @@ Implemented now:
 - Linear interpolation from measured PWM-to-RPM curve data
 - Safe start-boost from standstill
 - Serial diagnostics for bench bring-up
+- Shared 1-Wire DS18B20 bus on real hardware
+- Fixed ROM-ID assignment for one water sensor and one air sensor
 
 Planned next:
 
@@ -79,9 +81,10 @@ Bench hardware used so far:
 |---|---:|---|---|
 | ESP32 Dev Board | 1 | Main controller | Bench-tested with `esp32:esp32:esp32` target |
 | Noctua NF-S12A PWM | 1 | Cooling actuator | 120 mm 4-pin PWM fan |
-| DS18B20 | 2 | Water and air temperature | Planned production sensors |
+| DS18B20 | 2 | Water and air temperature | Bench-verified on shared 1-Wire bus |
 | 12 V supply | 1 | Fan power | Common ground with ESP32 is mandatory |
 | Tach pull-up resistor | 1 | Tach input biasing | Bench-verified at `3.3 kOhm` to `3.3 V` |
+| 1-Wire pull-up resistor | 1 | DS18B20 bus biasing | Bench-verified at `3.3 kOhm` to `3.3 V` |
 
 Planned production hardware concept:
 
@@ -101,7 +104,7 @@ Current bench mapping:
 |---|---:|---|
 | Fan PWM | 25 | 25 kHz PWM output |
 | Fan TACH | 26 | Tach input with pull-up |
-| 1-Wire bus | 4 | Planned shared DS18B20 bus |
+| 1-Wire bus | 33 | Bench-verified shared DS18B20 bus |
 
 Standard 4-pin PWM fan connector:
 
@@ -115,6 +118,10 @@ Standard 4-pin PWM fan connector:
 Important bench note:
 
 - `ESP32 GND`, fan ground, and the 12 V supply ground must share a common reference or the measurements become invalid.
+- Verified DS18B20 cable colors for the currently used potted sensors:
+  - `rot` -> `3.3 V`
+  - `gelb` -> `GND`
+  - `gruen` -> `DATA`
 
 ## Repository Layout
 
@@ -134,6 +141,7 @@ Important bench note:
 Key files:
 
 - Functional specification: [`docs/aquarium-cooling-controller-fsd.md`](docs/aquarium-cooling-controller-fsd.md)
+- Sensor bring-up summary: [`docs/sensor-bringup-2026-04-12.md`](docs/sensor-bringup-2026-04-12.md)
 - Fan characterization summary: [`docs/result fan test/measurement-summary-2026-04-12.md`](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
 - Controller smoke test: [`docs/result fan test/controller-smoke-test-2026-04-12.md`](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
 - Characterization sketch: [`firmware/fan-test/fan-test.ino`](firmware/fan-test/fan-test.ino)
@@ -146,6 +154,7 @@ Required tools:
 
 - [Arduino IDE](https://www.arduino.cc/en/software) 2.x or compatible `arduino-cli`
 - ESP32 board package for Arduino
+- Arduino libraries `OneWire` and `DallasTemperature`
 - PowerShell on Windows for the serial capture helper
 
 Recommended Arduino board package URL:
@@ -157,7 +166,7 @@ https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32
 Observed during the latest successful bench run:
 
 - FQBN: `esp32:esp32:esp32`
-- Running firmware reported active ESP32 Arduino core: `3.3.7`
+- Running firmware reported active ESP32 Arduino core: `3.3.8`
 
 If your Arduino IDE claims a newer ESP32 package is installed, verify what `arduino-cli` is actually using before debugging firmware behavior.
 
@@ -212,6 +221,8 @@ What it does today:
 
 - starts safely at `0%` PWM
 - initializes PWM output and tach measurement
+- initializes a shared DS18B20 bus on `GPIO33`
+- assigns water and air sensors by fixed ROM ID
 - prints the measured fan curve
 - accepts serial commands for controlled bench testing
 
@@ -253,11 +264,15 @@ Controller scaffold smoke test on hardware:
 - compile and flash successful
 - fan driver initialization successful
 - RPM monitor initialization successful
+- two DS18B20 sensors detected on the shared 1-Wire bus
+- water sensor ROM fixed at `28333844050000CB`
+- air sensor ROM fixed at `28244644050000DA`
 - `15%` target PWM started the fan with boost and settled near the measured curve
 - `stop` returned the fan cleanly to `0 RPM`
 
 Reference artifacts:
 
+- [`docs/sensor-bringup-2026-04-12.md`](docs/sensor-bringup-2026-04-12.md)
 - [`docs/result fan test/fan-curve-chart.svg`](docs/result%20fan%20test/fan-curve-chart.svg)
 - [`docs/result fan test/controller-startup-2026-04-12.txt`](docs/result%20fan%20test/controller-startup-2026-04-12.txt)
 - [`docs/result fan test/controller-smoke-test-2026-04-12.md`](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
@@ -292,8 +307,8 @@ Reference artifacts:
 
 Next likely steps:
 
-1. Add `sensor_manager` for both DS18B20 sensors
-2. Implement a minimal local water-temperature control loop
+1. Implement a minimal local water-temperature control loop
+2. Add the first air-assist logic using the assigned air sensor
 3. Refine plausibility timing and tolerance windows
 4. Add persistence, MQTT telemetry, and OTA support
 5. Finalize enclosure and wiring layout for the real aquarium installation

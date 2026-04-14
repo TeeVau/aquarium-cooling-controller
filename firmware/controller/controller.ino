@@ -18,19 +18,29 @@ constexpr uint8_t kWaterSensorRomCode[8] = {
     0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB,
 };
 
-constexpr SensorManagerConfig kWaterSensorConfig = {
+constexpr SensorManagerConfig kSensorManagerConfig = {
     33,
     2000,
     12,
-    true,
-    {0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB},
-    "Water sensor",
+    2,
+    {
+        {
+            true,
+            {0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB},
+            "Water sensor",
+        },
+        {
+            false,
+            {0},
+            "Test sensor",
+        },
+    },
 };
 
 FanDriver fanDriver;
 RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
-SensorManager sensorManager(kWaterSensorConfig);
+SensorManager sensorManager(kSensorManagerConfig);
 uint32_t lastDiagnosticsMs = 0;
 uint8_t targetPwmPercent = 0;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
@@ -80,12 +90,97 @@ void printCurveSummary() {
   Serial.println("%");
 }
 
+void printTrackedSensorDetails(const SensorSnapshot& sensorSnapshot, uint32_t nowMs) {
+  for (size_t trackedIndex = 0;
+       trackedIndex < kSensorManagerConfig.trackedSensorCount;
+       ++trackedIndex) {
+    const TrackedSensorSnapshot& tracked =
+        sensorSnapshot.trackedSensors[trackedIndex];
+    char sensorAddress[kSensorAddressBufferSize] = {};
+    sensorManager.formatTrackedAddress(trackedIndex, sensorAddress, sizeof(sensorAddress));
+
+    Serial.print("  ");
+    Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
+    Serial.print(" matched: ");
+    Serial.println(tracked.configuredAddressMatched ? "yes" : "no");
+
+    Serial.print("  ");
+    Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
+    Serial.print(" ROM: ");
+    Serial.println(sensorAddress);
+
+    Serial.print("  ");
+    Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
+    Serial.print(" sample valid: ");
+    Serial.println(tracked.sampleValid ? "yes" : "no");
+
+    Serial.print("  ");
+    Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
+    Serial.print(" power mode: ");
+    Serial.println(tracked.externallyPowered ? "external" : "parasite/unknown");
+
+    Serial.print("  ");
+    Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
+    Serial.print(" temperature: ");
+    if (tracked.sampleValid) {
+      Serial.print(tracked.temperatureC, 2);
+      Serial.println(" C");
+    } else {
+      Serial.println("unavailable");
+    }
+
+    Serial.print("  ");
+    Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
+    Serial.print(" sample age: ");
+    if (tracked.sampleValid) {
+      Serial.print(nowMs - tracked.lastSampleMs);
+      Serial.println(" ms");
+    } else {
+      Serial.println("n/a");
+    }
+  }
+}
+
+void printDiscoveredBusSensors(const SensorSnapshot& sensorSnapshot) {
+  for (uint8_t discoveredIndex = 0;
+       discoveredIndex < sensorSnapshot.discoveredSensorCount &&
+       discoveredIndex < kMaxDiscoveredSensors;
+       ++discoveredIndex) {
+    const DiscoveredSensorSnapshot& discovered =
+        sensorSnapshot.discoveredSensors[discoveredIndex];
+    if (!discovered.present) {
+      continue;
+    }
+
+    char sensorAddress[kSensorAddressBufferSize] = {};
+    snprintf(sensorAddress,
+             sizeof(sensorAddress),
+             "%02X%02X%02X%02X%02X%02X%02X%02X",
+             discovered.romCode[0],
+             discovered.romCode[1],
+             discovered.romCode[2],
+             discovered.romCode[3],
+             discovered.romCode[4],
+             discovered.romCode[5],
+             discovered.romCode[6],
+             discovered.romCode[7]);
+
+    Serial.print("  Bus sensor ");
+    Serial.print(discoveredIndex);
+    Serial.print(": ");
+    Serial.print(sensorAddress);
+    Serial.print(" (");
+    Serial.print(discovered.assigned ? "assigned" : "unassigned");
+    Serial.print(", ");
+    Serial.print(discovered.externallyPowered ? "external" : "parasite/unknown");
+    Serial.println(")");
+  }
+}
+
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
                       uint32_t sampleAgeMs,
                       uint32_t nowMs) {
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
-  char sensorAddress[kSensorAddressBufferSize] = {};
-  sensorManager.formatPrimaryAddress(sensorAddress, sizeof(sensorAddress));
 
   Serial.println("Controller diagnostics:");
 
@@ -125,10 +220,8 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.print(sampleAgeMs);
   Serial.println(" ms");
 
-  Serial.print("  ");
-  Serial.print(kWaterSensorConfig.sensorLabel);
-  Serial.print(" pin: GPIO");
-  Serial.println(kWaterSensorConfig.oneWirePin);
+  Serial.print("  1-Wire bus pin: GPIO");
+  Serial.println(kSensorManagerConfig.oneWirePin);
 
   Serial.print("  Sensors found: ");
   Serial.println(sensorSnapshot.discoveredSensorCount);
@@ -136,33 +229,11 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.print("  1-Wire presence pulse: ");
   Serial.println(sensorSnapshot.presenceDetected ? "yes" : "no");
 
-  Serial.print("  Configured ROM match: ");
-  Serial.println(sensorSnapshot.configuredAddressMatched ? "yes" : "no");
-
-  Serial.print("  Active sensor ROM: ");
-  Serial.println(sensorAddress);
-
-  Serial.print("  Sensor sample valid: ");
-  Serial.println(sensorSnapshot.sampleValid ? "yes" : "no");
-
-  Serial.print("  Sensor conversion pending: ");
+  Serial.print("  Bus conversion pending: ");
   Serial.println(sensorSnapshot.conversionPending ? "yes" : "no");
 
-  Serial.print("  Sensor temperature: ");
-  if (sensorSnapshot.sampleValid) {
-    Serial.print(sensorSnapshot.temperatureC, 2);
-    Serial.println(" C");
-  } else {
-    Serial.println("unavailable");
-  }
-
-  Serial.print("  Sensor sample age: ");
-  if (sensorSnapshot.sampleValid) {
-    Serial.print(nowMs - sensorSnapshot.lastSampleMs);
-    Serial.println(" ms");
-  } else {
-    Serial.println("n/a");
-  }
+  printTrackedSensorDetails(sensorSnapshot, nowMs);
+  printDiscoveredBusSensors(sensorSnapshot);
 
   Serial.println();
 }
@@ -239,8 +310,6 @@ void setup() {
   const bool rpmReady = rpmMonitor.begin();
   const bool sensorBusReady = sensorManager.begin(millis());
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
-  char sensorAddress[kSensorAddressBufferSize] = {};
-  sensorManager.formatPrimaryAddress(sensorAddress, sizeof(sensorAddress));
 
   Serial.println();
   Serial.println("Aquarium cooling controller");
@@ -251,8 +320,8 @@ void setup() {
   Serial.println(rpmReady ? "ok" : "failed");
   Serial.print("Sensor bus init: ");
   Serial.println(sensorBusReady ? "ok" : "failed");
-  Serial.print("Water sensor GPIO: ");
-  Serial.println(kWaterSensorConfig.oneWirePin);
+  Serial.print("1-Wire bus GPIO: ");
+  Serial.println(kSensorManagerConfig.oneWirePin);
   Serial.print("Detected sensors: ");
   Serial.println(sensorSnapshot.discoveredSensorCount);
   Serial.print("Configured water sensor ROM: ");
@@ -263,8 +332,8 @@ void setup() {
     Serial.print(kWaterSensorRomCode[i], HEX);
   }
   Serial.println();
-  Serial.print("Active sensor ROM: ");
-  Serial.println(sensorAddress);
+  printTrackedSensorDetails(sensorSnapshot, millis());
+  printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
   printHelp();
 }

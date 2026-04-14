@@ -15,8 +15,10 @@ SensorManager::SensorManager(const SensorManagerConfig& config)
       snapshot_{},
       initialized_(false),
       conversionReadyAtMs_(0) {
-  snapshot_.temperatureC = NAN;
-  clearAddress();
+  for (size_t index = 0; index < kMaxTrackedSensors; ++index) {
+    clearTrackedSensor(index);
+  }
+  clearDiscoveredSensors();
 }
 
 bool SensorManager::begin(uint32_t nowMs) {
@@ -28,7 +30,7 @@ bool SensorManager::begin(uint32_t nowMs) {
   initialized_ = true;
   snapshot_.busInitialized = true;
 
-  if (discoverSensor(nowMs)) {
+  if (discoverSensors(nowMs)) {
     startConversion(nowMs);
   }
 
@@ -40,10 +42,14 @@ void SensorManager::update(uint32_t nowMs) {
     return;
   }
 
-  if (!snapshot_.sensorDiscovered) {
+  const bool anyTrackedSensorKnown =
+      snapshot_.trackedSensors[0].addressKnown ||
+      snapshot_.trackedSensors[1].addressKnown;
+
+  if (!anyTrackedSensorKnown) {
     if (snapshot_.lastDiscoveryMs == 0 ||
         nowMs - snapshot_.lastDiscoveryMs >= config_.sampleIntervalMs) {
-      if (discoverSensor(nowMs)) {
+      if (discoverSensors(nowMs)) {
         startConversion(nowMs);
       }
     }
@@ -67,26 +73,31 @@ const SensorSnapshot& SensorManager::snapshot() const {
   return snapshot_;
 }
 
-void SensorManager::formatPrimaryAddress(char* buffer, size_t bufferSize) const {
+void SensorManager::formatTrackedAddress(size_t trackedIndex,
+                                         char* buffer,
+                                         size_t bufferSize) const {
   if (bufferSize == 0) {
     return;
   }
 
-  if (!snapshot_.addressKnown || bufferSize < (kRomCodeLength * 2U + 1U)) {
+  if (trackedIndex >= config_.trackedSensorCount ||
+      !snapshot_.trackedSensors[trackedIndex].addressKnown ||
+      bufferSize < (kRomCodeLength * 2U + 1U)) {
     snprintf(buffer, bufferSize, "n/a");
     return;
   }
 
+  const uint8_t* romCode = snapshot_.trackedSensors[trackedIndex].romCode;
   snprintf(buffer, bufferSize,
            "%02X%02X%02X%02X%02X%02X%02X%02X",
-           snapshot_.romCode[0],
-           snapshot_.romCode[1],
-           snapshot_.romCode[2],
-           snapshot_.romCode[3],
-           snapshot_.romCode[4],
-           snapshot_.romCode[5],
-           snapshot_.romCode[6],
-           snapshot_.romCode[7]);
+           romCode[0],
+           romCode[1],
+           romCode[2],
+           romCode[3],
+           romCode[4],
+           romCode[5],
+           romCode[6],
+           romCode[7]);
 }
 
 uint32_t SensorManager::conversionTimeMsForResolution(uint8_t resolutionBits) {
@@ -103,63 +114,106 @@ uint32_t SensorManager::conversionTimeMsForResolution(uint8_t resolutionBits) {
   }
 }
 
-bool SensorManager::discoverSensor(uint32_t nowMs) {
-  DeviceAddress address = {};
-
+bool SensorManager::discoverSensors(uint32_t nowMs) {
   snapshot_.lastDiscoveryMs = nowMs;
   snapshot_.presenceDetected = oneWire_.reset() != 0;
-  snapshot_.configuredAddressMatched = false;
   snapshot_.discoveredSensorCount =
-      (uint8_t)min<uint8_t>(sensors_.getDeviceCount(), 255);
+      (uint8_t)min<uint8_t>(sensors_.getDeviceCount(), kMaxDiscoveredSensors);
+
+  clearDiscoveredSensors();
+  for (size_t trackedIndex = 0; trackedIndex < kMaxTrackedSensors; ++trackedIndex) {
+    clearTrackedSensor(trackedIndex);
+  }
 
   if (!snapshot_.presenceDetected || snapshot_.discoveredSensorCount == 0) {
-    snapshot_.sensorDiscovered = false;
-    snapshot_.sampleValid = false;
     snapshot_.conversionPending = false;
-    snapshot_.temperatureC = NAN;
-    clearAddress();
     return false;
   }
 
-  if (config_.hasPreferredAddress) {
-    memcpy(address, config_.preferredAddress, sizeof(address));
-    snapshot_.configuredAddressMatched = sensors_.isConnected(address);
-  } else {
-    snapshot_.configuredAddressMatched = sensors_.getAddress(address, 0);
+  DeviceAddress discoveredAddress = {};
+  for (uint8_t discoveredIndex = 0;
+       discoveredIndex < snapshot_.discoveredSensorCount; ++discoveredIndex) {
+    if (!sensors_.getAddress(discoveredAddress, discoveredIndex)) {
+      continue;
+    }
+
+    DiscoveredSensorSnapshot& discovered =
+        snapshot_.discoveredSensors[discoveredIndex];
+    discovered.present = true;
+    discovered.assigned = false;
+    discovered.externallyPowered = sensors_.readPowerSupply(discoveredAddress);
+    memcpy(discovered.romCode, discoveredAddress, sizeof(discovered.romCode));
+    sensors_.setResolution(discoveredAddress, config_.resolutionBits);
   }
 
-  if (!snapshot_.configuredAddressMatched) {
-    snapshot_.sensorDiscovered = false;
-    snapshot_.sampleValid = false;
-    snapshot_.conversionPending = false;
-    snapshot_.temperatureC = NAN;
-    clearAddress();
-    return false;
+  for (size_t trackedIndex = 0; trackedIndex < config_.trackedSensorCount;
+       ++trackedIndex) {
+    const TrackedSensorConfig& trackedConfig = config_.trackedSensors[trackedIndex];
+    TrackedSensorSnapshot& tracked = snapshot_.trackedSensors[trackedIndex];
+    int matchedDiscoveredIndex = -1;
+
+    if (trackedConfig.hasPreferredAddress) {
+      matchedDiscoveredIndex = findDiscoveredIndexByAddress(trackedConfig.preferredAddress);
+      tracked.configuredAddressMatched = matchedDiscoveredIndex >= 0;
+      if (matchedDiscoveredIndex >= 0) {
+        memcpy(tracked.romCode,
+               snapshot_.discoveredSensors[matchedDiscoveredIndex].romCode,
+               sizeof(tracked.romCode));
+        tracked.externallyPowered =
+            snapshot_.discoveredSensors[matchedDiscoveredIndex].externallyPowered;
+      }
+    } else {
+      for (uint8_t discoveredIndex = 0;
+           discoveredIndex < snapshot_.discoveredSensorCount; ++discoveredIndex) {
+        if (!snapshot_.discoveredSensors[discoveredIndex].present ||
+            snapshot_.discoveredSensors[discoveredIndex].assigned) {
+          continue;
+        }
+
+        matchedDiscoveredIndex = discoveredIndex;
+        tracked.configuredAddressMatched = true;
+        memcpy(tracked.romCode,
+               snapshot_.discoveredSensors[matchedDiscoveredIndex].romCode,
+               sizeof(tracked.romCode));
+        tracked.externallyPowered =
+            snapshot_.discoveredSensors[matchedDiscoveredIndex].externallyPowered;
+        break;
+      }
+    }
+
+    if (matchedDiscoveredIndex < 0) {
+      continue;
+    }
+
+    snapshot_.discoveredSensors[matchedDiscoveredIndex].assigned = true;
+    tracked.addressKnown = true;
   }
 
-  memcpy(snapshot_.romCode, address, sizeof(snapshot_.romCode));
-  snapshot_.sensorDiscovered = true;
-  snapshot_.addressKnown = true;
-  sensors_.setResolution(address, config_.resolutionBits);
-  return true;
+  for (size_t trackedIndex = 0; trackedIndex < config_.trackedSensorCount;
+       ++trackedIndex) {
+    if (snapshot_.trackedSensors[trackedIndex].addressKnown) {
+      return true;
+    }
+  }
+
+  snapshot_.conversionPending = false;
+  return false;
 }
 
 void SensorManager::startConversion(uint32_t nowMs) {
-  if (!snapshot_.addressKnown) {
-    return;
-  }
-
   snapshot_.presenceDetected = oneWire_.reset() != 0;
   if (!snapshot_.presenceDetected) {
-    snapshot_.sensorDiscovered = false;
     snapshot_.discoveredSensorCount = 0;
-    snapshot_.sampleValid = false;
-    snapshot_.temperatureC = NAN;
+    clearDiscoveredSensors();
+    for (size_t trackedIndex = 0; trackedIndex < kMaxTrackedSensors; ++trackedIndex) {
+      clearTrackedSensor(trackedIndex);
+    }
     snapshot_.lastDiscoveryMs = 0;
+    snapshot_.conversionPending = false;
     return;
   }
 
-  sensors_.requestTemperaturesByAddress(snapshot_.romCode);
+  sensors_.requestTemperatures();
   snapshot_.conversionPending = true;
   snapshot_.lastRequestMs = nowMs;
   conversionReadyAtMs_ = nowMs + conversionTimeMsForResolution(config_.resolutionBits);
@@ -168,28 +222,65 @@ void SensorManager::startConversion(uint32_t nowMs) {
 void SensorManager::finishConversion(uint32_t nowMs) {
   snapshot_.conversionPending = false;
 
-  if (!snapshot_.addressKnown) {
-    snapshot_.sampleValid = false;
-    snapshot_.temperatureC = NAN;
-    return;
-  }
+  for (size_t trackedIndex = 0; trackedIndex < config_.trackedSensorCount;
+       ++trackedIndex) {
+    TrackedSensorSnapshot& tracked = snapshot_.trackedSensors[trackedIndex];
+    if (!tracked.addressKnown) {
+      tracked.sampleValid = false;
+      tracked.temperatureC = NAN;
+      continue;
+    }
 
-  const float temperatureC = sensors_.getTempC(snapshot_.romCode);
-  if (temperatureC == DEVICE_DISCONNECTED_C || isnan(temperatureC)) {
-    snapshot_.sensorDiscovered = false;
-    snapshot_.discoveredSensorCount = 0;
-    snapshot_.sampleValid = false;
-    snapshot_.temperatureC = NAN;
-    snapshot_.lastDiscoveryMs = 0;
-    return;
-  }
+    const float temperatureC = sensors_.getTempC(tracked.romCode);
+    if (temperatureC == DEVICE_DISCONNECTED_C || isnan(temperatureC)) {
+      tracked.sampleValid = false;
+      tracked.temperatureC = NAN;
+      snapshot_.lastDiscoveryMs = 0;
+      continue;
+    }
 
-  snapshot_.sampleValid = true;
-  snapshot_.temperatureC = temperatureC;
-  snapshot_.lastSampleMs = nowMs;
+    tracked.sampleValid = true;
+    tracked.temperatureC = temperatureC;
+    tracked.lastSampleMs = nowMs;
+  }
 }
 
-void SensorManager::clearAddress() {
-  memset(snapshot_.romCode, 0, sizeof(snapshot_.romCode));
-  snapshot_.addressKnown = false;
+void SensorManager::clearTrackedSensor(size_t trackedIndex) {
+  TrackedSensorSnapshot& tracked = snapshot_.trackedSensors[trackedIndex];
+  tracked.configuredAddressMatched = false;
+  tracked.addressKnown = false;
+  tracked.sampleValid = false;
+  tracked.externallyPowered = false;
+  tracked.temperatureC = NAN;
+  tracked.lastSampleMs = 0;
+  memset(tracked.romCode, 0, sizeof(tracked.romCode));
+}
+
+void SensorManager::clearDiscoveredSensors() {
+  for (size_t discoveredIndex = 0; discoveredIndex < kMaxDiscoveredSensors;
+       ++discoveredIndex) {
+    DiscoveredSensorSnapshot& discovered =
+        snapshot_.discoveredSensors[discoveredIndex];
+    discovered.present = false;
+    discovered.assigned = false;
+    discovered.externallyPowered = false;
+    memset(discovered.romCode, 0, sizeof(discovered.romCode));
+  }
+}
+
+int SensorManager::findDiscoveredIndexByAddress(const uint8_t address[8]) const {
+  for (uint8_t discoveredIndex = 0; discoveredIndex < snapshot_.discoveredSensorCount;
+       ++discoveredIndex) {
+    if (!snapshot_.discoveredSensors[discoveredIndex].present) {
+      continue;
+    }
+
+    if (memcmp(snapshot_.discoveredSensors[discoveredIndex].romCode,
+               address,
+               kRomCodeLength) == 0) {
+      return (int)discoveredIndex;
+    }
+  }
+
+  return -1;
 }
