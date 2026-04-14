@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include <esp_arduino_version.h>
+#include <Preferences.h>
 
 #include "control_engine.h"
 #include "fan_driver.h"
@@ -16,6 +17,9 @@ constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
 constexpr size_t kWaterSensorIndex = 0;
 constexpr size_t kAirSensorIndex = 1;
+constexpr char kPreferencesNamespace[] = "controller";
+constexpr char kKeyHasCustomTarget[] = "target_set";
+constexpr char kKeyTargetTemperature[] = "target_c";
 
 constexpr uint8_t kWaterSensorRomCode[8] = {
     0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB,
@@ -48,12 +52,23 @@ FanDriver fanDriver;
 RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
 SensorManager sensorManager(kSensorManagerConfig);
+Preferences preferences;
 ControlSnapshot lastControlSnapshot = {};
 uint32_t lastDiagnosticsMs = 0;
 float requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
 bool hasConfiguredTargetTemperature = false;
+bool preferencesReady = false;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
+
+enum class AlarmCode : uint8_t {
+  kNone,
+  kWaterSensorFault,
+  kAirSensorFault,
+  kFanFault,
+  kWaterSensorAndFanFault,
+  kAirSensorAndFanFault,
+};
 
 void printHelp() {
   Serial.println("Serial commands:");
@@ -109,6 +124,101 @@ void printCurveSummary() {
   Serial.print("Initial plausibility tolerance: +/-");
   Serial.print(FanCurve::kPlausibilityTolerancePercent);
   Serial.println("%");
+}
+
+bool beginPreferences() {
+  preferencesReady = preferences.begin(kPreferencesNamespace, false);
+  return preferencesReady;
+}
+
+void clearPersistedTargetTemperature() {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.remove(kKeyHasCustomTarget);
+  preferences.remove(kKeyTargetTemperature);
+}
+
+void persistTargetTemperature(float targetTemperatureC) {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.putBool(kKeyHasCustomTarget, true);
+  preferences.putFloat(kKeyTargetTemperature, targetTemperatureC);
+}
+
+void loadPersistedTargetTemperature() {
+  requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
+  hasConfiguredTargetTemperature = false;
+
+  if (!preferencesReady) {
+    return;
+  }
+
+  const bool hasStoredTarget = preferences.getBool(kKeyHasCustomTarget, false);
+  const float storedTargetTemperatureC =
+      preferences.getFloat(kKeyTargetTemperature,
+                           kDefaultControlConfig.defaultTargetTemperatureC);
+
+  if (hasStoredTarget &&
+      ControlEngine::isTargetTemperatureValid(storedTargetTemperatureC)) {
+    requestedTargetTemperatureC = storedTargetTemperatureC;
+    hasConfiguredTargetTemperature = true;
+    return;
+  }
+
+  if (hasStoredTarget) {
+    clearPersistedTargetTemperature();
+  }
+}
+
+AlarmCode determineAlarmCode(const FaultMonitorSnapshot& faultSnapshot) {
+  const bool waterFault = !lastControlSnapshot.waterSensorValid;
+  const bool airFault = !lastControlSnapshot.airSensorValid;
+  const bool fanFault = faultSnapshot.faultLatched;
+
+  if (waterFault && fanFault) {
+    return AlarmCode::kWaterSensorAndFanFault;
+  }
+
+  if (airFault && fanFault) {
+    return AlarmCode::kAirSensorAndFanFault;
+  }
+
+  if (waterFault) {
+    return AlarmCode::kWaterSensorFault;
+  }
+
+  if (airFault) {
+    return AlarmCode::kAirSensorFault;
+  }
+
+  if (fanFault) {
+    return AlarmCode::kFanFault;
+  }
+
+  return AlarmCode::kNone;
+}
+
+const char* alarmCodeLabel(AlarmCode alarmCode) {
+  switch (alarmCode) {
+    case AlarmCode::kNone:
+      return "none";
+    case AlarmCode::kWaterSensorFault:
+      return "water-sensor-fault";
+    case AlarmCode::kAirSensorFault:
+      return "air-sensor-fault";
+    case AlarmCode::kFanFault:
+      return "fan-fault";
+    case AlarmCode::kWaterSensorAndFanFault:
+      return "water-sensor+fan-fault";
+    case AlarmCode::kAirSensorAndFanFault:
+      return "air-sensor+fan-fault";
+    default:
+      return "unknown";
+  }
 }
 
 void printTrackedSensorDetails(const SensorSnapshot& sensorSnapshot, uint32_t nowMs) {
@@ -206,6 +316,9 @@ void printControlDetails() {
   Serial.print(lastControlSnapshot.targetTemperatureC, 2);
   Serial.println(" C");
 
+  Serial.print("  Target source: ");
+  Serial.println(hasConfiguredTargetTemperature ? "persisted/custom" : "default");
+
   Serial.print("  Target defaulted: ");
   Serial.println(lastControlSnapshot.targetDefaulted ? "yes" : "no");
 
@@ -241,6 +354,7 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
                       uint32_t sampleAgeMs,
                       uint32_t nowMs) {
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
+  const AlarmCode alarmCode = determineAlarmCode(snapshot);
 
   Serial.println("Controller diagnostics:");
   printControlDetails();
@@ -269,6 +383,15 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
 
   Serial.print("  Fault latched: ");
   Serial.println(snapshot.faultLatched ? "yes" : "no");
+
+  Serial.print("  Alarm code: ");
+  Serial.println(alarmCodeLabel(alarmCode));
+
+  Serial.print("  Water sensor ok: ");
+  Serial.println(lastControlSnapshot.waterSensorValid ? "yes" : "no");
+
+  Serial.print("  Air sensor ok: ");
+  Serial.println(lastControlSnapshot.airSensorValid ? "yes" : "no");
 
   Serial.print("  Start boost active: ");
   Serial.println(fanDriver.isStartBoostActive() ? "yes" : "no");
@@ -331,6 +454,7 @@ void handleSerialCommand(const char* command) {
   if (strcmp(command, "default") == 0) {
     requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
     hasConfiguredTargetTemperature = false;
+    clearPersistedTargetTemperature();
     Serial.print("Target temperature reset to default ");
     Serial.print(requestedTargetTemperatureC, 2);
     Serial.println(" C.");
@@ -344,6 +468,7 @@ void handleSerialCommand(const char* command) {
         !ControlEngine::isTargetTemperatureValid(parsedTargetTemperatureC)) {
       requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
       hasConfiguredTargetTemperature = false;
+      clearPersistedTargetTemperature();
       Serial.print("Invalid target temperature. Falling back to default ");
       Serial.print(requestedTargetTemperatureC, 2);
       Serial.println(" C.");
@@ -352,9 +477,10 @@ void handleSerialCommand(const char* command) {
 
     requestedTargetTemperatureC = parsedTargetTemperatureC;
     hasConfiguredTargetTemperature = true;
+    persistTargetTemperature(requestedTargetTemperatureC);
     Serial.print("Target temperature set to ");
     Serial.print(requestedTargetTemperatureC, 2);
-    Serial.println(" C.");
+    Serial.println(" C and persisted.");
     return;
   }
 
@@ -410,6 +536,8 @@ void setup() {
   Serial.begin(115200);
   delay(1500);
 
+  const bool preferencesOk = beginPreferences();
+  loadPersistedTargetTemperature();
   const bool fanReady = fanDriver.begin();
   const bool rpmReady = rpmMonitor.begin();
   const bool sensorBusReady = sensorManager.begin(millis());
@@ -425,6 +553,8 @@ void setup() {
   Serial.println(rpmReady ? "ok" : "failed");
   Serial.print("Sensor bus init: ");
   Serial.println(sensorBusReady ? "ok" : "failed");
+  Serial.print("Preferences init: ");
+  Serial.println(preferencesOk ? "ok" : "failed");
   Serial.print("1-Wire bus GPIO: ");
   Serial.println(kSensorManagerConfig.oneWirePin);
   printConfiguredRom("Configured water sensor ROM: ", kWaterSensorRomCode);
@@ -432,6 +562,8 @@ void setup() {
   Serial.print("Default target temperature: ");
   Serial.print(kDefaultControlConfig.defaultTargetTemperatureC, 2);
   Serial.println(" C");
+  Serial.print("Loaded target source: ");
+  Serial.println(hasConfiguredTargetTemperature ? "persisted/custom" : "default");
   Serial.print("Fallback target temperature: ");
   Serial.print(kDefaultControlConfig.defaultTargetTemperatureC, 2);
   Serial.println(" C");
