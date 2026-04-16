@@ -282,8 +282,9 @@ Scope:
 - Keep local control fully autonomous during network outages
 
 Current implementation note: The first Wi-Fi/MQTT increment implements
-publish-only telemetry and network diagnostics. MQTT remote configuration and
-OTA remain planned follow-up work.
+publish-only telemetry and network diagnostics and has been verified against
+the local MQTT broker. MQTT remote configuration and OTA remain planned
+follow-up work.
 
 Deliverables:
 
@@ -380,10 +381,12 @@ Dependencies:
 
 - FR-4.1 [Must]: The production controller shall publish water temperature, air
   temperature, fan PWM, fan RPM, target temperature, controller mode, and fault
-  status over MQTT. This is implemented as a publish-only telemetry foundation.
+  status over MQTT. This is implemented and broker-verified as a publish-only
+  telemetry foundation.
 - FR-4.2 [Must]: The production controller shall accept validated remote
   updates for target temperature and selected non-critical control flags over
-  MQTT. This remains planned after broker-side telemetry verification.
+  MQTT. This remains planned after the verified publish-only telemetry
+  foundation.
 - FR-4.3 [Should]: The production controller should support a manual override
   mode for service or testing with explicit validation and clear state
   reporting.
@@ -500,6 +503,10 @@ Dependencies:
 | OTA endpoint | ESP32 <- update service | Firmware metadata and image download over Wi-Fi |
 
 #### MQTT Topic Proposal
+
+Committed defaults use the root `aquarium/cooling`. The verified local bench
+setup used the override root `aquarium_cooling` from the ignored local network
+configuration file.
 
 | Topic | Direction | Purpose |
 |---|---|---|
@@ -717,7 +724,7 @@ runtime command input.
 |---|---|---|---|
 | AT-01 | Autonomous cooling without network | Run production firmware with Wi-Fi and MQTT unavailable | Cooling control remains active locally |
 | AT-02 | Persisted configuration resilience | Store target temperature, reboot, then boot without network | Target remains active and cooling still works |
-| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state and status topics are published |
+| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state and status topics are published, including normal operation and fault-policy state |
 | AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected |
 | AT-05 | Installed fan plausibility | Run controller in actual aquarium installation | Fan plausibility behaves correctly in the real airflow path |
 | AT-06 | OTA success path | Offer a newer valid firmware image via Wi-Fi OTA endpoint | Firmware downloads, validates, activates, and reports success |
@@ -762,7 +769,7 @@ Status interpretation in this matrix:
 | FR-3.5 | Must | TC-P2-08 | Implemented |
 | FR-3.6 | Must | TC-P2-09 | Implemented |
 | FR-3.7 | Should | TC-P2-10 | Implemented |
-| FR-4.1 | Must | AT-03 | Planned |
+| FR-4.1 | Must | AT-03 | Bench-verified |
 | FR-4.2 | Must | AT-04 | Planned |
 | FR-4.3 | Should | AT-04 | Planned |
 | FR-4.4 | Must | AT-06, AT-07 | Planned |
@@ -822,6 +829,8 @@ Status interpretation in this matrix:
 | Device name | `aquarium-cooling-controller` |
 | Hostname | `aq-cooling` |
 | MQTT root topic | `aquarium/cooling` |
+
+Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 
 ### C. Mechanical Integration Summary
 

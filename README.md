@@ -5,7 +5,7 @@
 ![Firmware](https://img.shields.io/badge/firmware-Arduino-green)
 ![Control](https://img.shields.io/badge/control-local-important)
 
-ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and a compile-verified MQTT telemetry foundation.
+ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and broker-verified MQTT telemetry.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ The main design rule is that cooling must continue to work locally on the ESP32 
 The repository currently contains both:
 
 - a completed fan-characterization workflow for the selected Noctua fan
-- a bench-verified local controller milestone with water control, air-assist, persisted target temperature, fault policy, and MQTT telemetry scaffolding
+- a bench-verified local controller milestone with water control, air-assist, persisted target temperature, fault policy, and MQTT telemetry
 
 ## Current Status
 
@@ -58,11 +58,13 @@ Implemented and bench-verified:
 - serial diagnostics with sensor, fan, and alarm information
 - verified local fault policy for water sensor, air sensor, tach, and RPM deviation failures
 
-Implemented and compile-verified:
+Implemented and broker-verified:
 
 - non-blocking Wi-Fi connection management
 - MQTT telemetry publishing with `PubSubClient`
 - local secret override via ignored `network_config.local.h`
+- broker-side normal telemetry capture
+- broker-side fault telemetry for air sensor, water sensor, and fan-fault cases
 
 Still intentionally open:
 
@@ -85,12 +87,12 @@ Implemented now:
 - Tach plausibility diagnostics against the measured fan curve
 - Central fault-policy model with alarm severity and response labels
 - Hardware-verified fault responses for sensor failures and fan plausibility faults
-- Wi-Fi/MQTT telemetry foundation that does not block local cooling
+- Wi-Fi/MQTT telemetry that does not block local cooling
 - Serial service commands for diagnostics and bench operation
 
 Planned next:
 
-- MQTT broker-side verification and live data capture
+- longer aquarium-side live data capture
 - aquarium-side control tuning with recorded live operating data
 - MQTT remote parameter updates
 - OTA firmware updates over Wi-Fi
@@ -176,6 +178,8 @@ Key files:
 - Controller firmware: [firmware/controller/controller.ino](firmware/controller/controller.ino)
 - Fan characterization sketch: [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino)
 - Serial capture helper: [tools/serial-capture.ps1](tools/serial-capture.ps1)
+- MQTT client helper: [tools/mqtt-client.ps1](tools/mqtt-client.ps1)
+- MQTT telemetry notes: [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
 
 ## Software Dependencies
 
@@ -183,7 +187,8 @@ Required tools:
 
 - [Arduino IDE](https://www.arduino.cc/en/software) 2.x or compatible `arduino-cli`
 - ESP32 board package for Arduino
-- PowerShell on Windows for the serial capture helper
+- PowerShell on Windows for the serial and MQTT helper scripts
+- Mosquitto command-line clients for broker-side MQTT verification
 
 Required Arduino libraries:
 
@@ -191,6 +196,7 @@ Required Arduino libraries:
 |---|---|---|
 | `OneWire` | Shared DS18B20 bus transport | Arduino Library Manager |
 | `DallasTemperature` | DS18B20 sensor handling | Arduino Library Manager |
+| `PubSubClient` | MQTT client for ESP32 telemetry | Arduino Library Manager |
 
 Recommended ESP32 board package URL:
 
@@ -233,6 +239,12 @@ Capture serial output:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\serial-capture.ps1 -Port COM3 -Baud 115200 -DurationSec 15 -OutputPath 'build\serial-log.txt'
+```
+
+Subscribe to MQTT telemetry with the helper script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Count 45
 ```
 
 ## Usage
@@ -302,7 +314,7 @@ Committed defaults intentionally contain no secrets. To enable telemetry locally
 
 `network_config.local.h` is ignored by Git and must not be committed.
 
-Published topics use the root `aquarium/cooling` by default:
+Published topics use the root `aquarium/cooling` by default. The current local bench setup has also been verified with the configured root `aquarium_cooling`.
 
 | Topic suffix | Payload |
 |---|---|
@@ -355,11 +367,20 @@ Verified controller milestone on hardware:
 - missing tach feedback enters `fan-fault`, `critical`, and `report-fan-fault`
 - slowed fan / RPM deviation outside tolerance enters `fan-fault` after the configured mismatch debounce
 - fan fault recovery returns to `none` after the configured plausible-match debounce
+- Wi-Fi connects and reports an assigned IP through the `network` command
+- MQTT connects to the broker and publishes with the configured root topic
+- normal broker capture observed all 20 expected state, diagnostic, and status topics
+- broker telemetry reports plausible normal values such as `water-control`, target `23.00`, fan RPM, expected RPM, tolerance, and RPM error
+- air-sensor fault publishes `air-sensor-fault`, `warning`, and `disable-air-assist`
+- water-sensor fault publishes `water-sensor-fault`, `critical`, `water-fallback`, `cooling_degraded=true`, and fallback fan PWM
+- fan RPM deviation publishes `fan-fault`, `critical`, `report-fan-fault`, `cooling_degraded=true`, and `service_required=true`
+- broker telemetry returns to `alarm_code=none` after fault recovery
 
 Useful artifacts:
 
 - [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
 - [docs/fault-policy-2026-04-16.md](docs/fault-policy-2026-04-16.md)
+- [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
 
@@ -400,11 +421,11 @@ Useful artifacts:
 
 Next likely steps:
 
-1. Verify MQTT telemetry against the real broker.
-2. Capture live aquarium data for water and air control tuning.
-3. Add MQTT remote parameter updates with validation and persistence.
-4. Add OTA support over Wi-Fi.
-5. Finalize enclosure, wiring, and installation layout for the real aquarium.
+1. Capture longer live aquarium data for water and air control tuning.
+2. Add MQTT remote parameter updates with validation and persistence.
+3. Add OTA support over Wi-Fi.
+4. Finalize enclosure, wiring, and installation layout for the real aquarium.
+5. Re-check fan plausibility in the final installed airflow path.
 
 ## Contributing
 

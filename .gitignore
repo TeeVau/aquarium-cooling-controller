@@ -21,3 +21,6 @@ dist/
 
 # Local secrets
 firmware/controller/network_config.local.h
+tools/*.local.ps1
+tools/*.secret.ps1
+*.credential.xml

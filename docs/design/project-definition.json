@@ -7,7 +7,7 @@
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, and compile-verified MQTT telemetry"
+    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, and broker-verified publish-only MQTT telemetry"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -274,7 +274,7 @@
     }
   },
   "mqtt": {
-    "design_status": "Publish-only MQTT telemetry foundation is implemented; broker-side verification, remote configuration, and OTA remain planned",
+    "design_status": "Publish-only MQTT telemetry foundation is implemented and broker-verified; remote configuration and OTA remain planned",
     "functional_requirements": {
       "publish": [
         "water temperature",
@@ -325,6 +325,23 @@
         "aquarium/cooling/set/air_min_pwm_percent"
       ]
     },
+    "latest_broker_verification": {
+      "date": "2026-04-16",
+      "local_root_topic": "aquarium_cooling",
+      "normal_topics_observed": 20,
+      "verified_states": [
+        "normal telemetry",
+        "air sensor fault telemetry",
+        "water sensor fault telemetry",
+        "fan fault telemetry",
+        "fault recovery telemetry"
+      ],
+      "notes": [
+        "MQTT is publish-only in the current firmware",
+        "Local cooling and fault handling remain authoritative on the ESP32",
+        "Broker credentials and local network configuration are intentionally not committed"
+      ]
+    },
     "critical_rule": "MQTT must never be required for the controller to keep cooling autonomously"
   },
   "software_requirements": {
@@ -351,9 +368,8 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "Publish-only MQTT telemetry foundation is implemented and compile-verified",
+    "current_task": "Publish-only MQTT telemetry foundation is implemented, broker-verified, and documented",
     "next_expected_tasks": [
-        "Verify MQTT telemetry against the real broker",
         "Tune water and air control behavior with live aquarium data",
         "Add MQTT remote configuration",
         "Add OTA support",
@@ -380,7 +396,8 @@
       "Controller continues cooling without network",
       "Target temperature survives reboot",
       "Fan plausibility fault is detected using curve + tolerance",
-      "MQTT can observe and set non-critical parameters without compromising autonomy"
+      "MQTT can observe current state without compromising autonomy",
+      "MQTT can later set non-critical parameters only after validation and persistence are implemented"
     ]
   },
   "known_open_points": [
