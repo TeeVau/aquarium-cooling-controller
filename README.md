@@ -178,6 +178,8 @@ Key files:
 - Sensor bring-up notes: [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
 - Fan measurement summary: [docs/result fan test/measurement-summary-2026-04-12.md](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
 - Controller firmware: [firmware/controller/controller.ino](firmware/controller/controller.ino)
+- Controller diagrams: [docs/design/controller-diagrams.md](docs/design/controller-diagrams.md)
+- Mermaid rendering notes: [docs/design/mermaid-rendering.md](docs/design/mermaid-rendering.md)
 - Fan characterization sketch: [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino)
 - FHEM MQTT2 integration notes: [integrations/fhem/README.md](integrations/fhem/README.md)
 - FHEM MQTT2 device definition: [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg)

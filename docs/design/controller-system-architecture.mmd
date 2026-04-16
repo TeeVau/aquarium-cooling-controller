@@ -1,0 +1,61 @@
+flowchart LR
+  subgraph AQUA["Aquarium hardware"]
+    WATER["DS18B20 water sensor<br/>ROM 28333844050000CB"]
+    AIR["DS18B20 air sensor<br/>ROM 28244644050000DA"]
+    FAN["Noctua NF-S12A PWM fan<br/>12 V power"]
+  end
+
+  subgraph IO["ESP32 pins and electrical interfaces"]
+    ONEWIRE["Shared 1-Wire bus<br/>GPIO33, 3.3 kOhm pull-up"]
+    PWM["Fan PWM output<br/>GPIO25, 25 kHz"]
+    TACH["Fan tach input<br/>GPIO26, 3.3 kOhm pull-up"]
+  end
+
+  subgraph LOCAL["ESP32 local autonomous control"]
+    SENSOR["SensorManager<br/>2 s sample interval<br/>non-blocking DS18B20 conversion"]
+    CONTROL["ControlEngine<br/>target validation<br/>water demand + air assist"]
+    DRIVER["FanDriver<br/>PWM command<br/>40% start boost for 2 s"]
+    RPM["RpmMonitor<br/>1 s tach sample window"]
+    CURVE["FanCurve<br/>expected RPM interpolation<br/>plausibility tolerance"]
+    FAULTMON["FaultMonitor<br/>5 s settling<br/>3 mismatches to latch<br/>3 matches to recover"]
+    POLICY["FaultPolicy<br/>alarm code<br/>severity<br/>local response"]
+    PREFS["Preferences / NVS<br/>persisted target temperature"]
+    SERIAL["Serial service console<br/>status, target, default,<br/>airassist, faults, network, publish"]
+  end
+
+  subgraph NET["Optional network telemetry"]
+    WIFI["Wi-Fi station<br/>10 s reconnect interval"]
+    MQTT["MqttTelemetry<br/>10 s publish interval<br/>availability last will"]
+    BROKER["MQTT broker / FHEM<br/>state, diagnostics, status topics"]
+  end
+
+  WATER --- ONEWIRE
+  AIR --- ONEWIRE
+  ONEWIRE --> SENSOR
+
+  SENSOR -->|ControlInputs| CONTROL
+  PREFS -->|stored target| CONTROL
+  SERIAL -->|target/default commands| PREFS
+  SERIAL -->|diagnostic commands| CONTROL
+
+  CONTROL -->|final PWM percent| DRIVER
+  DRIVER --> PWM
+  PWM --> FAN
+  FAN --> TACH
+  TACH --> RPM
+
+  DRIVER -->|applied PWM| FAULTMON
+  RPM -->|measured RPM| FAULTMON
+  CURVE -->|expected RPM + tolerance| FAULTMON
+  CONTROL -->|sensor validity + mode| POLICY
+  FAULTMON -->|fan plausibility + latch| POLICY
+
+  CONTROL --> MQTT
+  FAULTMON --> MQTT
+  POLICY --> MQTT
+  MQTT --> WIFI
+  WIFI --> BROKER
+
+  POLICY -->|alarm, degraded cooling,<br/>service required| SERIAL
+  SENSOR -->|ROMs, samples,<br/>presence pulse| SERIAL
+  FAULTMON -->|RPM diagnostics| SERIAL

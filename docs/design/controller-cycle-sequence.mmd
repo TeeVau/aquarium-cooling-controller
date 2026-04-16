@@ -1,0 +1,70 @@
+sequenceDiagram
+    autonumber
+    participant Main as Controller loop
+    participant Serial as Serial console
+    participant Sensors as SensorManager
+    participant Control as ControlEngine
+    participant Fan as FanDriver
+    participant RPM as RpmMonitor
+    participant Fault as FaultMonitor
+    participant Policy as FaultPolicy
+    participant MQTT as MqttTelemetry
+    participant Broker as MQTT broker
+
+    Note over Main,MQTT: Local sensing, control, fan drive, RPM checks, and fault policy keep running without network connectivity.
+
+    loop each Arduino loop iteration
+        Main->>Serial: processSerialInput()
+        Serial-->>Main: optional command effects
+
+        Main->>Sensors: update(nowMs)
+        alt first boot or no known sensors
+            Sensors->>Sensors: discover ROM IDs on shared 1-Wire bus
+            Sensors->>Sensors: request temperature conversion
+        else conversion pending and ready
+            Sensors->>Sensors: read water and air temperatures
+        else sample interval elapsed, 2000 ms
+            Sensors->>Sensors: request next conversion
+        end
+
+        Sensors-->>Main: SensorSnapshot
+        Main->>Control: compute(ControlInputs)
+        Control-->>Main: ControlSnapshot with mode and final PWM
+
+        Main->>Fan: setCommandedPwmPercent(final PWM)
+        Main->>Fan: update(nowMs)
+        alt fan starts from 0% to nonzero PWM
+            Fan-->>Main: apply 40% start boost for 2000 ms
+        else steady command
+            Fan-->>Main: apply commanded PWM
+        end
+
+        Main->>RPM: update(nowMs)
+        RPM-->>Main: latest RPM from 1000 ms tach window
+
+        Main->>MQTT: update(nowMs)
+        alt Wi-Fi or MQTT disconnected
+            MQTT->>MQTT: retry connection every 10000 ms
+        else MQTT connected
+            MQTT->>MQTT: mqttClient.loop()
+        end
+
+        alt diagnostics interval elapsed, 2000 ms
+            Main->>Fault: evaluate(applied PWM, measured RPM, nowMs)
+            Fault->>Fault: wait 5000 ms after PWM change before plausibility
+            Fault-->>Main: FaultMonitorSnapshot
+
+            Main->>Policy: evaluate(ControlSnapshot, FaultMonitorSnapshot)
+            Policy-->>Main: alarm, severity, response, degraded cooling
+
+            Main->>Serial: printDiagnostics()
+            Main->>MQTT: publishTelemetry(force=false)
+            alt MQTT connected and publish interval elapsed, 10000 ms
+                MQTT->>Broker: publish state, diagnostics, and status topics
+            else not connected or interval not elapsed
+                MQTT-->>Main: skip telemetry publish
+            end
+        else diagnostics interval not elapsed
+            Main-->>Main: return quickly to keep loop responsive
+        end
+    end
