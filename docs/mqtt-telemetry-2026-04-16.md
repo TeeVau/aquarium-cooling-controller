@@ -110,6 +110,31 @@ Local capture logs from the verification run were written below `build/`.
 Those files are intentionally ignored and are not part of the committed
 documentation.
 
+## FHEM MQTT2 Integration
+
+The repository includes a FHEM monitoring integration in:
+
+```text
+integrations/fhem/
+```
+
+The main file is:
+
+```text
+integrations/fhem/aquarium-cooling-mqtt2-device.cfg
+```
+
+It defines an `MQTT2_DEVICE` with readings for all currently published state,
+diagnostic, status, and availability topics. The definition uses the verified
+bench root topic `aquarium_cooling`. If the firmware uses the committed default
+root topic `aquarium/cooling`, replace the root topic in the FHEM file before
+importing it.
+
+The FHEM integration is intentionally monitoring-only for this firmware
+revision. A future `setList` for `target_temp_c`, `air_assist_enable`, and
+`air_min_pwm_percent` is documented in the file but remains commented until the
+firmware subscribes to and validates remote set topics.
+
 ## Verification Plan
 
 1. Compile with no local network config. Done.
@@ -157,3 +182,6 @@ documentation.
 - Fault recovery was observed on MQTT: `alarm_code=none`,
   `fault_severity=none`, `fault_response=normal-control`,
   `cooling_degraded=false`, and `service_required=false`.
+- A FHEM `MQTT2_DEVICE` definition is available for the verified topic set,
+  with the future remote-control `setList` kept commented until firmware
+  support exists.

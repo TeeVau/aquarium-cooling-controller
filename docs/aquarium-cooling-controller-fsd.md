@@ -284,13 +284,15 @@ Scope:
 Current implementation note: The first Wi-Fi/MQTT increment implements
 publish-only telemetry and network diagnostics and has been verified against
 the local MQTT broker. MQTT remote configuration and OTA remain planned
-follow-up work.
+follow-up work. A FHEM `MQTT2_DEVICE` integration is provided as a
+monitoring-only consumer for the verified telemetry topics.
 
 Deliverables:
 
 - MQTT topic implementation
 - OTA update workflow
 - Telemetry and status publishing
+- FHEM monitoring integration for current MQTT telemetry
 - Validated remote settings workflow
 
 Exit criteria:
@@ -400,6 +402,10 @@ Dependencies:
   firmware if OTA download, validation, or activation fails.
 - FR-4.8 [Should]: The production controller should publish OTA state and last
   update result through diagnostics or MQTT status topics.
+- FR-4.9 [Should]: The repository should provide a local home-automation
+  monitoring definition for the current MQTT telemetry surface. The current
+  FHEM `MQTT2_DEVICE` definition is monitoring-only until remote set topics are
+  implemented in firmware.
 
 ### 4.2 Non-Functional Requirements (NFR)
 
@@ -533,6 +539,23 @@ configuration file.
 | `aquarium/cooling/set/target_temp_c` | subscribe | Remote target temperature |
 | `aquarium/cooling/set/air_assist_enable` | subscribe | Air-assist enable flag |
 | `aquarium/cooling/set/air_min_pwm_percent` | subscribe | Minimum air-assist PWM |
+
+#### FHEM MQTT2 Monitoring Integration
+
+The repository includes a FHEM `MQTT2_DEVICE` definition at:
+
+```text
+integrations/fhem/aquarium-cooling-mqtt2-device.cfg
+```
+
+It maps all currently published telemetry topics to explicit FHEM readings.
+The file uses the verified bench root topic `aquarium_cooling`; deployments
+using the committed default root `aquarium/cooling` must adjust the root topic
+before importing it into FHEM.
+
+The FHEM integration must remain monitoring-only for the current firmware
+revision. The planned FHEM `setList` is documented but commented out because
+the firmware does not yet subscribe to or validate remote `/set/...` topics.
 
 #### OTA Update Interface
 
@@ -726,10 +749,11 @@ runtime command input.
 | AT-02 | Persisted configuration resilience | Store target temperature, reboot, then boot without network | Target remains active and cooling still works |
 | AT-03 | MQTT observability | Connect broker and inspect published topics | Required state and status topics are published, including normal operation and fault-policy state |
 | AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected |
-| AT-05 | Installed fan plausibility | Run controller in actual aquarium installation | Fan plausibility behaves correctly in the real airflow path |
-| AT-06 | OTA success path | Offer a newer valid firmware image via Wi-Fi OTA endpoint | Firmware downloads, validates, activates, and reports success |
-| AT-07 | OTA failure rollback | Interrupt or invalidate OTA image during update test | Device preserves current working firmware and reports failure |
-| AT-08 | Installed enclosure concept | Install the full system in the intended rear upper mounting position | Electronics are centralized, accessible, and cable routing is practical |
+| AT-05 | FHEM MQTT2 monitoring | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings without issuing control commands |
+| AT-06 | Installed fan plausibility | Run controller in actual aquarium installation | Fan plausibility behaves correctly in the real airflow path |
+| AT-07 | OTA success path | Offer a newer valid firmware image via Wi-Fi OTA endpoint | Firmware downloads, validates, activates, and reports success |
+| AT-08 | OTA failure rollback | Interrupt or invalidate OTA image during update test | Device preserves current working firmware and reports failure |
+| AT-09 | Installed enclosure concept | Install the full system in the intended rear upper mounting position | Electronics are centralized, accessible, and cable routing is practical |
 
 ### 8.4 Traceability Matrix
 
@@ -759,11 +783,11 @@ Status interpretation in this matrix:
 | FR-2.9 | Must | TC-P2-05, AT-02 | Bench-verified |
 | FR-2.10 | Must | TC-P2-05 | Bench-verified |
 | FR-2.11 | Must | AT-01, AT-02 | Bench-verified |
-| FR-2.12 | Must | TC-P2-15, AT-08 | Planned |
-| FR-2.13 | Must | TC-P2-16, AT-08 | Planned |
-| FR-2.14 | Should | TC-P2-15, TC-P2-16, AT-08 | Planned |
-| FR-3.1 | Must | TC-P2-07, AT-05 | Bench-verified |
-| FR-3.2 | Must | TC-P2-07, AT-05 | Bench-verified |
+| FR-2.12 | Must | TC-P2-15, AT-09 | Planned |
+| FR-2.13 | Must | TC-P2-16, AT-09 | Planned |
+| FR-2.14 | Should | TC-P2-15, TC-P2-16, AT-09 | Planned |
+| FR-3.1 | Must | TC-P2-07, AT-06 | Bench-verified |
+| FR-3.2 | Must | TC-P2-07, AT-06 | Bench-verified |
 | FR-3.3 | Must | TC-P2-07 | Bench-verified |
 | FR-3.4 | Must | TC-P2-07, AT-03 | Bench-verified |
 | FR-3.5 | Must | TC-P2-08 | Implemented |
@@ -772,13 +796,14 @@ Status interpretation in this matrix:
 | FR-4.1 | Must | AT-03 | Bench-verified |
 | FR-4.2 | Must | AT-04 | Planned |
 | FR-4.3 | Should | AT-04 | Planned |
-| FR-4.4 | Must | AT-06, AT-07 | Planned |
-| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-06 | Planned |
-| FR-4.6 | Must | AT-06, AT-07 | Planned |
-| FR-4.7 | Must | AT-07 | Planned |
-| FR-4.8 | Should | AT-06, AT-07 | Planned |
+| FR-4.4 | Must | AT-07, AT-08 | Planned |
+| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-07 | Planned |
+| FR-4.6 | Must | AT-07, AT-08 | Planned |
+| FR-4.7 | Must | AT-08 | Planned |
+| FR-4.8 | Should | AT-07, AT-08 | Planned |
+| FR-4.9 | Should | AT-05 | Implemented |
 | NFR-1.1 | Must | AT-01 | Bench-verified |
-| NFR-1.2 | Must | TC-P2-02, AT-05 | Bench-verified |
+| NFR-1.2 | Must | TC-P2-02, AT-06 | Bench-verified |
 | NFR-1.3 | Must | TC-P2-05, AT-02 | Bench-verified |
 | NFR-1.4 | Must | TC-P2-02, TC-P2-07 | Bench-verified |
 | NFR-1.5 | Must | TC-P2-11 | Implemented |
@@ -787,7 +812,7 @@ Status interpretation in this matrix:
 | NFR-1.8 | Should | TC-P2-13, AT-01, AT-02 | Implemented |
 | NFR-1.9 | Must | TC-P1-01 | Covered |
 | NFR-1.10 | Must | TC-P2-14, AT-01 | Planned |
-| NFR-1.11 | Must | AT-06, AT-07 | Planned |
+| NFR-1.11 | Must | AT-07, AT-08 | Planned |
 
 ## 9. Troubleshooting Guide
 
@@ -799,6 +824,7 @@ Status interpretation in this matrix:
 | False fan faults near low PWM | Unstable tach region below stable operating range | Compare measured RPM to stable hold PWM region | Exclude low-PWM region or widen tolerance there |
 | Cooling stops after water sensor issue | Fallback behavior not configured or not applied correctly | Inspect fault logs and safe fallback branch | Implement and verify defined safe fallback PWM |
 | MQTT updates seem ignored | Network unavailable or payload invalid | Check broker connection and validation logs | Restore connectivity or send valid payload |
+| FHEM readings do not update | FHEM IODev or topic root does not match the broker traffic | Compare the serial `network` root topic with the FHEM `readingList`; inspect broker traffic for `<root>/status/availability` | Correct the IODev, subscription, credentials, or root topic |
 | OTA update does not start | OTA endpoint unreachable or update policy not satisfied | Check Wi-Fi state, OTA endpoint, and OTA diagnostics | Restore connectivity or correct OTA configuration |
 | OTA update fails validation | Corrupt image, metadata mismatch, or unsupported image | Inspect OTA result code and firmware metadata | Rebuild or republish a valid firmware image |
 | Cable routing is awkward or too long | Enclosure position or terminal layout is poorly chosen | Inspect mounted enclosure position and wiring paths | Move enclosure or revise terminal placement in the printed design |
@@ -829,6 +855,7 @@ Status interpretation in this matrix:
 | Device name | `aquarium-cooling-controller` |
 | Hostname | `aq-cooling` |
 | MQTT root topic | `aquarium/cooling` |
+| FHEM integration | `integrations/fhem/aquarium-cooling-mqtt2-device.cfg` |
 
 Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 

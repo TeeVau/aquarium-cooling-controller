@@ -179,6 +179,7 @@ Key files:
 - Fan measurement summary: [docs/result fan test/measurement-summary-2026-04-12.md](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
 - Controller firmware: [firmware/controller/controller.ino](firmware/controller/controller.ino)
 - Fan characterization sketch: [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino)
+- FHEM MQTT2 integration notes: [integrations/fhem/README.md](integrations/fhem/README.md)
 - FHEM MQTT2 device definition: [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg)
 - Serial capture helper: [tools/serial-capture.ps1](tools/serial-capture.ps1)
 - MQTT client helper: [tools/mqtt-client.ps1](tools/mqtt-client.ps1)
@@ -342,6 +343,24 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/status/service_required` | whether service/operator action is required |
 | `/status/availability` | MQTT last-will availability |
 
+### 4. FHEM MQTT2 Integration
+
+The repository includes a ready-to-paste FHEM `MQTT2_DEVICE` definition for
+the current telemetry topics:
+
+```text
+integrations/fhem/aquarium-cooling-mqtt2-device.cfg
+```
+
+The FHEM definition is intended for monitoring. It creates readings for the
+published state, diagnostics, fault-policy values, and MQTT availability. The
+current firmware does not yet subscribe to remote `/set/...` topics, so the
+future FHEM `setList` is kept commented in the configuration file.
+
+The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.
+If your firmware uses the committed default root `aquarium/cooling`, replace
+`aquarium_cooling` in the FHEM file before importing it.
+
 ## Bench Results
 
 Verified fan characterization for the current Noctua bench setup:
@@ -384,6 +403,7 @@ Useful artifacts:
 - [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
 - [docs/fault-policy-2026-04-16.md](docs/fault-policy-2026-04-16.md)
 - [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
+- [integrations/fhem/README.md](integrations/fhem/README.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
 
@@ -413,6 +433,13 @@ Useful artifacts:
 - Run `status` and inspect `Target source` and `Target defaulted`.
 - Use `default` to clear persisted target temperature and return to `23.0 C`.
 - If `target <c>` is outside the valid range, the firmware intentionally falls back to `23.0 C`.
+
+### FHEM readings do not update
+
+- Verify that the FHEM `IODev` points to the correct `MQTT2_CLIENT` or `MQTT2_SERVER`.
+- Compare the root topic reported by the serial `network` command with the root topic in [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg).
+- Confirm the broker receives `<root>/status/availability` as `online`.
+- Remember that FHEM set commands are intentionally inactive until MQTT remote configuration is implemented in firmware.
 
 ### Upload fails
 
