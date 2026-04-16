@@ -18,3 +18,6 @@ dist/
 *.log
 *.tmp
 .codex-*/
+
+# Local secrets
+firmware/controller/network_config.local.h

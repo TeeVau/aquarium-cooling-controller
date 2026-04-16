@@ -7,7 +7,7 @@
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, and local fault policy"
+    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, and compile-verified MQTT telemetry"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -274,7 +274,7 @@
     }
   },
   "mqtt": {
-    "design_status": "Planned for production firmware, not needed for fan characterization test sketch",
+    "design_status": "Publish-only MQTT telemetry foundation is implemented; broker-side verification, remote configuration, and OTA remain planned",
     "functional_requirements": {
       "publish": [
         "water temperature",
@@ -306,7 +306,18 @@
         "aquarium/cooling/status/fan_fault",
         "aquarium/cooling/status/water_sensor_ok",
         "aquarium/cooling/status/air_sensor_ok",
-        "aquarium/cooling/status/alarm_code"
+        "aquarium/cooling/status/cooling_degraded",
+        "aquarium/cooling/status/service_required",
+        "aquarium/cooling/status/alarm_code",
+        "aquarium/cooling/status/fault_severity",
+        "aquarium/cooling/status/fault_response",
+        "aquarium/cooling/status/availability"
+      ],
+      "diagnostic": [
+        "aquarium/cooling/diagnostic/expected_rpm",
+        "aquarium/cooling/diagnostic/rpm_tolerance",
+        "aquarium/cooling/diagnostic/rpm_error",
+        "aquarium/cooling/diagnostic/plausibility_active"
       ],
       "set": [
         "aquarium/cooling/set/target_temp_c",
@@ -340,10 +351,11 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "Fault policy is implemented, bench-verified, and documented before MQTT/OTA work",
+    "current_task": "Publish-only MQTT telemetry foundation is implemented and compile-verified",
     "next_expected_tasks": [
+        "Verify MQTT telemetry against the real broker",
         "Tune water and air control behavior with live aquarium data",
-        "Add MQTT telemetry and remote configuration",
+        "Add MQTT remote configuration",
         "Add OTA support",
         "Finalize enclosure and wiring for the installed system"
     ],

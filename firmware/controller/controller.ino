@@ -8,6 +8,7 @@
 #include "fan_curve.h"
 #include "fault_monitor.h"
 #include "fault_policy.h"
+#include "mqtt_telemetry.h"
 #include "rpm_monitor.h"
 #include "sensor_manager.h"
 
@@ -53,12 +54,16 @@ FanDriver fanDriver;
 RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
 SensorManager sensorManager(kSensorManagerConfig);
+MqttTelemetry mqttTelemetry;
 Preferences preferences;
 ControlSnapshot lastControlSnapshot = {};
+FaultMonitorSnapshot lastFaultSnapshot = {};
+FaultPolicySnapshot lastFaultPolicySnapshot = {};
 uint32_t lastDiagnosticsMs = 0;
 float requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
 bool hasConfiguredTargetTemperature = false;
 bool preferencesReady = false;
+bool lastFaultSnapshotValid = false;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
 
@@ -69,6 +74,8 @@ void printHelp() {
   Serial.println("  default       -> reset target temperature to default 23.0 C");
   Serial.println("  airassist     -> print current air-assist defaults");
   Serial.println("  faults        -> print current fault-policy defaults");
+  Serial.println("  network       -> print Wi-Fi/MQTT telemetry status");
+  Serial.println("  publish       -> publish telemetry immediately when MQTT is connected");
   Serial.println("  help          -> show this help");
   Serial.println();
 }
@@ -322,11 +329,10 @@ void printFaultPolicyDefaults() {
 }
 
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
+                      const FaultPolicySnapshot& policySnapshot,
                       uint32_t sampleAgeMs,
                       uint32_t nowMs) {
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
-  const FaultPolicySnapshot policySnapshot =
-      FaultPolicy::evaluate(lastControlSnapshot, snapshot);
 
   Serial.println("Controller diagnostics:");
   printControlDetails();
@@ -440,6 +446,27 @@ void handleSerialCommand(const char* command) {
 
   if (strcmp(command, "faults") == 0) {
     printFaultPolicyDefaults();
+    return;
+  }
+
+  if (strcmp(command, "network") == 0) {
+    mqttTelemetry.printStatus(Serial);
+    return;
+  }
+
+  if (strcmp(command, "publish") == 0) {
+    if (!lastFaultSnapshotValid) {
+      Serial.println("Telemetry not ready yet. Wait for the first diagnostics cycle.");
+      return;
+    }
+
+    const bool published = mqttTelemetry.publishTelemetry(millis(),
+                                                          lastControlSnapshot,
+                                                          lastFaultSnapshot,
+                                                          lastFaultPolicySnapshot,
+                                                          true);
+    Serial.println(published ? "Telemetry published." :
+                              "Telemetry not published. Check network status.");
     return;
   }
 
@@ -573,6 +600,8 @@ void setup() {
   printTrackedSensorDetails(sensorSnapshot, millis());
   printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
+  mqttTelemetry.begin(millis());
+  mqttTelemetry.printStatus(Serial);
   printHelp();
 }
 
@@ -587,6 +616,7 @@ void loop() {
   fanDriver.setCommandedPwmPercent(lastControlSnapshot.finalPwmPercent, nowMs);
   fanDriver.update(nowMs);
   rpmMonitor.update(nowMs);
+  mqttTelemetry.update(nowMs);
 
   if (nowMs - lastDiagnosticsMs < kDiagnosticsIntervalMs) {
     return;
@@ -594,8 +624,18 @@ void loop() {
 
   lastDiagnosticsMs = nowMs;
 
-  const FaultMonitorSnapshot snapshot =
+  lastFaultSnapshot =
       faultMonitor.evaluate(fanDriver.appliedPwmPercent(), rpmMonitor.rpm(), nowMs);
+  lastFaultPolicySnapshot = FaultPolicy::evaluate(lastControlSnapshot, lastFaultSnapshot);
+  lastFaultSnapshotValid = true;
 
-  printDiagnostics(snapshot, rpmMonitor.sampleAgeMs(nowMs), nowMs);
+  printDiagnostics(lastFaultSnapshot,
+                   lastFaultPolicySnapshot,
+                   rpmMonitor.sampleAgeMs(nowMs),
+                   nowMs);
+  mqttTelemetry.publishTelemetry(nowMs,
+                                 lastControlSnapshot,
+                                 lastFaultSnapshot,
+                                 lastFaultPolicySnapshot,
+                                 false);
 }

@@ -281,6 +281,10 @@ Scope:
 - Accept validated remote configuration updates
 - Keep local control fully autonomous during network outages
 
+Current implementation note: The first Wi-Fi/MQTT increment implements
+publish-only telemetry and network diagnostics. MQTT remote configuration and
+OTA remain planned follow-up work.
+
 Deliverables:
 
 - MQTT topic implementation
@@ -376,10 +380,10 @@ Dependencies:
 
 - FR-4.1 [Must]: The production controller shall publish water temperature, air
   temperature, fan PWM, fan RPM, target temperature, controller mode, and fault
-  status over MQTT.
+  status over MQTT. This is implemented as a publish-only telemetry foundation.
 - FR-4.2 [Must]: The production controller shall accept validated remote
   updates for target temperature and selected non-critical control flags over
-  MQTT.
+  MQTT. This remains planned after broker-side telemetry verification.
 - FR-4.3 [Should]: The production controller should support a manual override
   mode for service or testing with explicit validation and clear state
   reporting.
@@ -505,11 +509,20 @@ Dependencies:
 | `aquarium/cooling/state/fan_rpm` | publish | Measured fan RPM |
 | `aquarium/cooling/state/target_temp_c` | publish | Active target temperature |
 | `aquarium/cooling/state/controller_mode` | publish | Controller mode |
+| `aquarium/cooling/diagnostic/expected_rpm` | publish | Interpolated expected RPM |
+| `aquarium/cooling/diagnostic/rpm_tolerance` | publish | Current RPM tolerance |
+| `aquarium/cooling/diagnostic/rpm_error` | publish | Measured minus expected RPM |
+| `aquarium/cooling/diagnostic/plausibility_active` | publish | Whether fan plausibility is currently evaluated |
 | `aquarium/cooling/status/fan_plausible` | publish | Plausibility state |
 | `aquarium/cooling/status/fan_fault` | publish | Latched fan fault |
 | `aquarium/cooling/status/water_sensor_ok` | publish | Water sensor health |
 | `aquarium/cooling/status/air_sensor_ok` | publish | Air sensor health |
+| `aquarium/cooling/status/cooling_degraded` | publish | Whether cooling effectiveness is degraded |
+| `aquarium/cooling/status/service_required` | publish | Whether operator action is required |
 | `aquarium/cooling/status/alarm_code` | publish | Fault summary |
+| `aquarium/cooling/status/fault_severity` | publish | Fault severity |
+| `aquarium/cooling/status/fault_response` | publish | Local fault response |
+| `aquarium/cooling/status/availability` | publish | MQTT online/offline availability |
 | `aquarium/cooling/set/target_temp_c` | subscribe | Remote target temperature |
 | `aquarium/cooling/set/air_assist_enable` | subscribe | Air-assist enable flag |
 | `aquarium/cooling/set/air_min_pwm_percent` | subscribe | Minimum air-assist PWM |
@@ -583,6 +596,8 @@ operation and diagnostics:
 | `default` | Clear persisted target and return to the default `23.0 C` |
 | `airassist` | Print the current air-assist defaults |
 | `faults` | Print the current local fault-policy defaults |
+| `network` | Print Wi-Fi/MQTT configuration and connection status |
+| `publish` | Publish telemetry immediately when MQTT is connected |
 | `help` | Print the supported command list |
 
 Future production command inputs may additionally be represented by validated

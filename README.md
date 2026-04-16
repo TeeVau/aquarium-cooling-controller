@@ -5,7 +5,7 @@
 ![Firmware](https://img.shields.io/badge/firmware-Arduino-green)
 ![Control](https://img.shields.io/badge/control-local-important)
 
-ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and a clear upgrade path toward MQTT and OTA.
+ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and a compile-verified MQTT telemetry foundation.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ The main design rule is that cooling must continue to work locally on the ESP32 
 The repository currently contains both:
 
 - a completed fan-characterization workflow for the selected Noctua fan
-- a bench-verified first local controller milestone with water control, air-assist, and persisted target temperature
+- a bench-verified local controller milestone with water control, air-assist, persisted target temperature, fault policy, and MQTT telemetry scaffolding
 
 ## Current Status
 
@@ -58,10 +58,16 @@ Implemented and bench-verified:
 - serial diagnostics with sensor, fan, and alarm information
 - verified local fault policy for water sensor, air sensor, tach, and RPM deviation failures
 
+Implemented and compile-verified:
+
+- non-blocking Wi-Fi connection management
+- MQTT telemetry publishing with `PubSubClient`
+- local secret override via ignored `network_config.local.h`
+
 Still intentionally open:
 
 - real-aquarium tuning of water and air control behavior
-- MQTT telemetry and remote configuration
+- MQTT remote configuration
 - OTA update path
 
 ## Features
@@ -79,12 +85,14 @@ Implemented now:
 - Tach plausibility diagnostics against the measured fan curve
 - Central fault-policy model with alarm severity and response labels
 - Hardware-verified fault responses for sensor failures and fan plausibility faults
+- Wi-Fi/MQTT telemetry foundation that does not block local cooling
 - Serial service commands for diagnostics and bench operation
 
 Planned next:
 
-- aquarium-side control tuning with live operating data
-- MQTT telemetry and remote parameter updates
+- MQTT broker-side verification and live data capture
+- aquarium-side control tuning with recorded live operating data
+- MQTT remote parameter updates
 - OTA firmware updates over Wi-Fi
 
 ## Hardware
@@ -202,7 +210,7 @@ Observed in the latest verified bench run:
 1. Install Arduino IDE 2.x.
 2. Add the ESP32 board package URL in `File -> Preferences`.
 3. Install the `esp32` board package in Boards Manager.
-4. Install `OneWire` and `DallasTemperature` in the Library Manager.
+4. Install `OneWire`, `DallasTemperature`, and `PubSubClient` in the Library Manager.
 5. Open one of these sketches:
    - `firmware/fan-test/fan-test.ino`
    - `firmware/controller/controller.ino`
@@ -268,6 +276,8 @@ Current serial service commands:
 | `default` | Clear the stored target and return to `23.0 C` |
 | `airassist` | Print the current air-assist defaults |
 | `faults` | Print the current fault-policy defaults |
+| `network` | Print Wi-Fi/MQTT configuration and connection status |
+| `publish` | Publish telemetry immediately when MQTT is connected |
 | `help` | Show the command list |
 
 Example session:
@@ -277,6 +287,45 @@ target 24.5
 status
 default
 ```
+
+### 3. MQTT Telemetry
+
+MQTT is optional and non-critical. If Wi-Fi or MQTT is unavailable, local cooling, fan control, sensor handling, and fault policy continue to run on the ESP32.
+
+Committed defaults intentionally contain no secrets. To enable telemetry locally:
+
+1. Copy [network_config.local.example.h](firmware/controller/network_config.local.example.h) to `firmware/controller/network_config.local.h`.
+2. Fill in `AQ_WIFI_SSID`, `AQ_WIFI_PASSWORD`, `AQ_MQTT_HOST`, and optional MQTT credentials.
+3. Compile and flash the controller firmware.
+4. Use the serial command `network` to inspect connection state.
+5. Use `publish` to force a telemetry publish after the first diagnostics cycle.
+
+`network_config.local.h` is ignored by Git and must not be committed.
+
+Published topics use the root `aquarium/cooling` by default:
+
+| Topic suffix | Payload |
+|---|---|
+| `/state/water_temp_c` | water temperature or `unavailable` |
+| `/state/air_temp_c` | air temperature or `unavailable` |
+| `/state/target_temp_c` | active target temperature |
+| `/state/fan_pwm_percent` | final commanded fan PWM |
+| `/state/fan_rpm` | measured fan RPM |
+| `/state/controller_mode` | local control mode |
+| `/diagnostic/expected_rpm` | interpolated expected RPM |
+| `/diagnostic/rpm_tolerance` | current RPM tolerance |
+| `/diagnostic/rpm_error` | measured minus expected RPM |
+| `/diagnostic/plausibility_active` | whether RPM plausibility is currently active |
+| `/status/fan_plausible` | current plausibility result |
+| `/status/fan_fault` | latched fan fault |
+| `/status/water_sensor_ok` | water sensor health |
+| `/status/air_sensor_ok` | air sensor health |
+| `/status/alarm_code` | summarized fault code |
+| `/status/fault_severity` | `none`, `warning`, or `critical` |
+| `/status/fault_response` | local fault response |
+| `/status/cooling_degraded` | whether cooling effectiveness is degraded |
+| `/status/service_required` | whether service/operator action is required |
+| `/status/availability` | MQTT last-will availability |
 
 ## Bench Results
 
@@ -351,11 +400,11 @@ Useful artifacts:
 
 Next likely steps:
 
-1. Tune water and air control behavior with live aquarium data.
-2. Add MQTT telemetry and remote parameter updates.
-3. Add OTA support over Wi-Fi.
-4. Finalize enclosure, wiring, and installation layout for the real aquarium.
-5. Re-check fan plausibility in the installed airflow path if the final mounting changes airflow materially.
+1. Verify MQTT telemetry against the real broker.
+2. Capture live aquarium data for water and air control tuning.
+3. Add MQTT remote parameter updates with validation and persistence.
+4. Add OTA support over Wi-Fi.
+5. Finalize enclosure, wiring, and installation layout for the real aquarium.
 
 ## Contributing
 
