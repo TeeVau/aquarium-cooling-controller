@@ -167,6 +167,8 @@ Important notes:
 |- firmware/
 |  |- controller/
 |  `- fan-test/
+|- integrations/
+|  `- fhem/
 `- tools/
 ```
 
@@ -177,6 +179,7 @@ Key files:
 - Fan measurement summary: [docs/result fan test/measurement-summary-2026-04-12.md](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
 - Controller firmware: [firmware/controller/controller.ino](firmware/controller/controller.ino)
 - Fan characterization sketch: [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino)
+- FHEM MQTT2 device definition: [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg)
 - Serial capture helper: [tools/serial-capture.ps1](tools/serial-capture.ps1)
 - MQTT client helper: [tools/mqtt-client.ps1](tools/mqtt-client.ps1)
 - MQTT telemetry notes: [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
