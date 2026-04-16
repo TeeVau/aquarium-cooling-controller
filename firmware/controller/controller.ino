@@ -7,6 +7,7 @@
 #include "fan_driver.h"
 #include "fan_curve.h"
 #include "fault_monitor.h"
+#include "fault_policy.h"
 #include "rpm_monitor.h"
 #include "sensor_manager.h"
 
@@ -61,21 +62,13 @@ bool preferencesReady = false;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
 
-enum class AlarmCode : uint8_t {
-  kNone,
-  kWaterSensorFault,
-  kAirSensorFault,
-  kFanFault,
-  kWaterSensorAndFanFault,
-  kAirSensorAndFanFault,
-};
-
 void printHelp() {
   Serial.println("Serial commands:");
   Serial.println("  status        -> print diagnostics immediately");
   Serial.println("  target <c>    -> set target water temperature in C");
   Serial.println("  default       -> reset target temperature to default 23.0 C");
   Serial.println("  airassist     -> print current air-assist defaults");
+  Serial.println("  faults        -> print current fault-policy defaults");
   Serial.println("  help          -> show this help");
   Serial.println();
 }
@@ -171,53 +164,6 @@ void loadPersistedTargetTemperature() {
 
   if (hasStoredTarget) {
     clearPersistedTargetTemperature();
-  }
-}
-
-AlarmCode determineAlarmCode(const FaultMonitorSnapshot& faultSnapshot) {
-  const bool waterFault = !lastControlSnapshot.waterSensorValid;
-  const bool airFault = !lastControlSnapshot.airSensorValid;
-  const bool fanFault = faultSnapshot.faultLatched;
-
-  if (waterFault && fanFault) {
-    return AlarmCode::kWaterSensorAndFanFault;
-  }
-
-  if (airFault && fanFault) {
-    return AlarmCode::kAirSensorAndFanFault;
-  }
-
-  if (waterFault) {
-    return AlarmCode::kWaterSensorFault;
-  }
-
-  if (airFault) {
-    return AlarmCode::kAirSensorFault;
-  }
-
-  if (fanFault) {
-    return AlarmCode::kFanFault;
-  }
-
-  return AlarmCode::kNone;
-}
-
-const char* alarmCodeLabel(AlarmCode alarmCode) {
-  switch (alarmCode) {
-    case AlarmCode::kNone:
-      return "none";
-    case AlarmCode::kWaterSensorFault:
-      return "water-sensor-fault";
-    case AlarmCode::kAirSensorFault:
-      return "air-sensor-fault";
-    case AlarmCode::kFanFault:
-      return "fan-fault";
-    case AlarmCode::kWaterSensorAndFanFault:
-      return "water-sensor+fan-fault";
-    case AlarmCode::kAirSensorAndFanFault:
-      return "air-sensor+fan-fault";
-    default:
-      return "unknown";
   }
 }
 
@@ -350,11 +296,37 @@ void printControlDetails() {
   Serial.println("%");
 }
 
+void printFaultPolicyDefaults() {
+  Serial.println("Fault policy:");
+  Serial.print("  Water sensor fault response: ");
+  Serial.print(FaultPolicy::responseLabel(FaultResponse::kWaterFallback));
+  Serial.print(" at ");
+  Serial.print(kDefaultControlConfig.fallbackPwmPercent);
+  Serial.println("% PWM");
+
+  Serial.print("  Air sensor fault response: ");
+  Serial.println(FaultPolicy::responseLabel(FaultResponse::kDisableAirAssist));
+
+  Serial.print("  Fan fault response: ");
+  Serial.println(FaultPolicy::responseLabel(FaultResponse::kReportFanFault));
+
+  Serial.print("  Fan fault latch after mismatches: ");
+  Serial.println(kDefaultFaultMonitorConfig.mismatchCyclesRequired);
+
+  Serial.print("  Fan fault recovery after matches: ");
+  Serial.println(kDefaultFaultMonitorConfig.matchCyclesRequiredForRecovery);
+
+  Serial.print("  Fan settling time: ");
+  Serial.print(kDefaultFaultMonitorConfig.settlingTimeMs);
+  Serial.println(" ms");
+}
+
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
                       uint32_t sampleAgeMs,
                       uint32_t nowMs) {
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
-  const AlarmCode alarmCode = determineAlarmCode(snapshot);
+  const FaultPolicySnapshot policySnapshot =
+      FaultPolicy::evaluate(lastControlSnapshot, snapshot);
 
   Serial.println("Controller diagnostics:");
   printControlDetails();
@@ -385,13 +357,28 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.println(snapshot.faultLatched ? "yes" : "no");
 
   Serial.print("  Alarm code: ");
-  Serial.println(alarmCodeLabel(alarmCode));
+  Serial.println(FaultPolicy::alarmCodeLabel(policySnapshot.alarmCode));
+
+  Serial.print("  Fault severity: ");
+  Serial.println(FaultPolicy::severityLabel(policySnapshot.severity));
+
+  Serial.print("  Fault response: ");
+  Serial.println(FaultPolicy::responseLabel(policySnapshot.response));
+
+  Serial.print("  Cooling degraded: ");
+  Serial.println(policySnapshot.coolingDegraded ? "yes" : "no");
+
+  Serial.print("  Service required: ");
+  Serial.println(policySnapshot.serviceRequired ? "yes" : "no");
 
   Serial.print("  Water sensor ok: ");
-  Serial.println(lastControlSnapshot.waterSensorValid ? "yes" : "no");
+  Serial.println(policySnapshot.waterSensorOk ? "yes" : "no");
 
   Serial.print("  Air sensor ok: ");
-  Serial.println(lastControlSnapshot.airSensorValid ? "yes" : "no");
+  Serial.println(policySnapshot.airSensorOk ? "yes" : "no");
+
+  Serial.print("  Fan ok: ");
+  Serial.println(policySnapshot.fanOk ? "yes" : "no");
 
   Serial.print("  Start boost active: ");
   Serial.println(fanDriver.isStartBoostActive() ? "yes" : "no");
@@ -448,6 +435,11 @@ void handleSerialCommand(const char* command) {
     Serial.print("% .. ");
     Serial.print(kDefaultControlConfig.airAssistMaximumPwmPercent);
     Serial.println("%");
+    return;
+  }
+
+  if (strcmp(command, "faults") == 0) {
+    printFaultPolicyDefaults();
     return;
   }
 

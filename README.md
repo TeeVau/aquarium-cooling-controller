@@ -77,6 +77,7 @@ Implemented now:
 - Target temperature persistence across reboot
 - Safe fallback to `23.0 C` for invalid or missing target values
 - Tach plausibility diagnostics against the measured fan curve
+- Central fault-policy model with alarm severity and response labels
 - Serial service commands for diagnostics and bench operation
 
 Planned next:
@@ -266,6 +267,7 @@ Current serial service commands:
 | `target <c>` | Set and persist a custom target temperature |
 | `default` | Clear the stored target and return to `23.0 C` |
 | `airassist` | Print the current air-assist defaults |
+| `faults` | Print the current fault-policy defaults |
 | `help` | Show the command list |
 
 Example session:
@@ -298,10 +300,12 @@ Verified controller milestone on hardware:
 - persisted target survives reboot
 - local water control behaves plausibly
 - first air-assist behavior behaves plausibly
+- fault policy reports alarm code, severity, response, service requirement, and degraded-cooling state
 
 Useful artifacts:
 
 - [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
+- [docs/fault-policy-2026-04-16.md](docs/fault-policy-2026-04-16.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
 
@@ -342,7 +346,7 @@ Useful artifacts:
 
 Next likely steps:
 
-1. Refine the fault policy for water sensor, air sensor, and confirmed fan faults.
+1. Verify water-sensor, air-sensor, and fan-fault policy on hardware.
 2. Tune water and air control behavior with live aquarium data.
 3. Add MQTT telemetry and remote parameter updates.
 4. Add OTA support over Wi-Fi.

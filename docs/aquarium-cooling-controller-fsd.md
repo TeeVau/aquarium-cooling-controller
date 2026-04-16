@@ -171,6 +171,7 @@ Planned software modules:
 | `fan_driver` | PWM output handling and start-boost support |
 | `rpm_monitor` | Tach pulse counting and RPM calculation |
 | `fault_monitor` | Plausibility checking, debounce, fault latching |
+| `fault_policy` | Alarm classification, severity, and local fault response |
 | `telemetry` | Wi-Fi, MQTT publish/subscribe, diagnostics |
 | `ota_client` | OTA metadata lookup, download, validation, update handoff |
 
@@ -531,7 +532,8 @@ Dependencies:
 | `fan_driver` | `rpm_monitor` | Active PWM state for settling logic |
 | `rpm_monitor` | `fault_monitor` | Measured RPM |
 | `fan_curve` | `fault_monitor` | Expected RPM interpolation lookup |
-| `fault_monitor` | `telemetry` | Diagnostic and fault state |
+| `fault_monitor` | `fault_policy` | Fan plausibility state and latched fan fault |
+| `fault_policy` | `telemetry` | Alarm code, severity, response, and service state |
 
 ### 6.3 Data Models / Schemas
 
@@ -562,6 +564,11 @@ Dependencies:
 | `rpm_error_percent` | float | Relative deviation |
 | `fan_plausible` | bool | Current plausibility result |
 | `fan_fault` | bool | Latched fault state |
+| `alarm_code` | string | Current summarized fault code |
+| `fault_severity` | string | `none`, `warning`, or `critical` |
+| `fault_response` | string | Current local fault response |
+| `cooling_degraded` | bool | Whether local cooling effectiveness is degraded |
+| `service_required` | bool | Whether operator/service action is required |
 
 ### 6.4 Commands / Opcodes
 
@@ -575,6 +582,7 @@ operation and diagnostics:
 | `target <c>` | Set and persist a custom water target temperature |
 | `default` | Clear persisted target and return to the default `23.0 C` |
 | `airassist` | Print the current air-assist defaults |
+| `faults` | Print the current local fault-policy defaults |
 | `help` | Print the supported command list |
 
 Future production command inputs may additionally be represented by validated
@@ -641,13 +649,15 @@ runtime command input.
 
 1. On invalid persisted configuration, reset affected keys to defaults and log
    the recovery.
-2. On water-sensor failure, enter the defined safe fallback PWM and raise an
-   alarm.
-3. On air-sensor failure, continue water-based control and suppress air-assist.
+2. On water-sensor failure, enter `water-fallback` at `40%` PWM and raise a
+   critical alarm.
+3. On air-sensor failure, continue water-based control, suppress air-assist,
+   and raise a warning.
 4. On network failure, continue local control with the last valid persisted
    settings.
-5. On confirmed fan fault, enter the project-defined fault response and report
-   the condition locally and over MQTT when available.
+5. On confirmed fan fault, keep the locally computed PWM command, raise a
+   critical `fan-fault`, and require service. A later hardware test may decide
+   whether an additional fan-fault boost is useful.
 6. On OTA download or validation failure, remain on the currently working
    firmware and report the failed update state.
 

@@ -261,12 +261,13 @@
       "initial_recommendation": "Drive fan to a defined safe fallback PWM and raise an alarm"
     },
     "air_sensor_failure": {
-      "policy": "Continue water-based cooling control, disable or ignore air-assist logic, raise diagnostic flag"
+      "policy": "Continue water-based cooling control, disable air-assist, raise warning diagnostic"
     },
     "fan_plausibility_failure": {
       "policy": "Treat as fan fault",
       "user_rule": "Any confirmed RPM deviation outside the allowed tolerance band is a fault",
-      "reaction_to_be_finalized": "At minimum publish/record error; final production reaction still needs explicit definition before production release"
+      "current_reaction": "Report critical fan fault, keep locally computed PWM command, require service",
+      "reaction_to_be_finalized": "Hardware tests should decide whether a future fan-fault boost is useful"
     },
     "wifi_mqtt_failure": {
       "policy": "No impact on local cooling control; last persisted settings remain active"
@@ -341,7 +342,7 @@
   "codex_tasking": {
     "current_task": "Stabilize and document the first local controller milestone before MQTT/OTA work",
     "next_expected_tasks": [
-        "Refine the remaining fault policy for sensor and fan errors",
+        "Verify the implemented fault policy for sensor and fan errors on hardware",
         "Tune water and air control behavior with live aquarium data",
         "Add MQTT telemetry and remote configuration",
         "Add OTA support",
