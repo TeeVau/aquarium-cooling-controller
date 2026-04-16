@@ -7,7 +7,7 @@
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "bench-verified local control firmware with water control, air-assist, and target persistence"
+    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, and local fault policy"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -267,7 +267,7 @@
       "policy": "Treat as fan fault",
       "user_rule": "Any confirmed RPM deviation outside the allowed tolerance band is a fault",
       "current_reaction": "Report critical fan fault, keep locally computed PWM command, require service",
-      "reaction_to_be_finalized": "Hardware tests should decide whether a future fan-fault boost is useful"
+      "verification_status": "Verified with missing tach feedback and deliberate RPM deviation by slowing the fan"
     },
     "wifi_mqtt_failure": {
       "policy": "No impact on local cooling control; last persisted settings remain active"
@@ -340,9 +340,8 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "Stabilize and document the first local controller milestone before MQTT/OTA work",
+    "current_task": "Fault policy is implemented, bench-verified, and documented before MQTT/OTA work",
     "next_expected_tasks": [
-        "Verify the implemented fault policy for sensor and fan errors on hardware",
         "Tune water and air control behavior with live aquarium data",
         "Add MQTT telemetry and remote configuration",
         "Add OTA support",
@@ -374,7 +373,6 @@
   },
   "known_open_points": [
     "Exact final tolerance percentage must be tuned after measurements",
-    "Exact final reaction to confirmed fan fault still needs explicit definition",
     "Final hardware-level PWM electrical interface to the selected fan must be validated in the built prototype",
     "Curve should be verified once in free-air test and once in real installation if behavior changes significantly"
   ],

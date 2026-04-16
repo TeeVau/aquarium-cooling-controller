@@ -269,7 +269,7 @@ Dependencies:
 
 - Phase 1 fan characterization results
 - Installed DS18B20 sensors
-- Finalized fault-reaction policy for confirmed fan fault
+- Finalized local fault-reaction policy for sensor and fan faults
 
 ### 3.3 Phase 3 - Networked Observability and Remote Configuration
 
@@ -656,8 +656,9 @@ runtime command input.
 4. On network failure, continue local control with the last valid persisted
    settings.
 5. On confirmed fan fault, keep the locally computed PWM command, raise a
-   critical `fan-fault`, and require service. A later hardware test may decide
-   whether an additional fan-fault boost is useful.
+   critical `fan-fault`, and require service. Hardware tests with missing tach
+   feedback and a deliberately slowed fan verified this response; no automatic
+   fan-fault boost is currently applied.
 6. On OTA download or validation failure, remain on the currently working
    firmware and report the failed update state.
 
@@ -873,7 +874,6 @@ FanCurvePoint curve[] = {
 ### F. Open Points Requiring Finalization
 
 - Final plausibility tolerance percentage after measured tuning
-- Final reaction to confirmed fan fault in production mode
 - Final hardware implementation of PWM electrical compatibility
 - Whether manual override remains enabled in production firmware
 - Whether installed airflow requires a separate in-situ fan curve

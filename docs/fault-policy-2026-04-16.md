@@ -50,8 +50,10 @@ aber unveraendert.
 Grund: Bei einem Tach-/Fanfehler ist nicht sicher, ob ein pauschaler Override
 auf `100%` die reale Kuehlung verbessert. Ein blockierter oder elektrisch
 defekter Fan wird dadurch nicht repariert; bei reinem Tachproblem waere ein
-Override nur lauter. Die naechste Hardwaretest-Runde soll zeigen, ob ein
-separater "fan fault boost" spaeter sinnvoll ist.
+Override nur lauter. Die Hardwaretests mit fehlendem Tachsignal und bewusst
+abgebremstem Fan haben bestaetigt, dass die aktuelle Reaktion den Fehler
+zuverlaessig meldet und Recovery sauber entprellt. Ein separater
+"fan fault boost" wird deshalb aktuell nicht eingefuehrt.
 
 ## Service-Kommando
 
@@ -64,10 +66,42 @@ Das Kommando `faults` gibt die aktuellen Policy-Defaults aus:
 - Match-Zyklen bis Recovery
 - Settling-Zeit vor Plausibilitaetsbewertung
 
-## Noch zu testen
+## Verifizierte Hardwaretests
 
-- Wassersensor abziehen und `water-sensor-fault` plus `40%` PWM bestaetigen
-- Luftsensor abziehen und `air-sensor-fault` ohne Unterbrechung der
-  Wasserregelung bestaetigen
-- Tach-/Fanfehler simulieren und `fan-fault` nach drei Mismatches bestaetigen
-- Recovery nach drei plausiblen Matches verifizieren
+Alle folgenden Tests wurden am realen ESP32-Aufbau mit zwei DS18B20-Sensoren
+und dem Noctua NF-S12A PWM durchgefuehrt.
+
+| Test | Erwartung | Ergebnis |
+|---|---|---|
+| Normalbetrieb | `Alarm code: none`, alle Komponenten ok | Bestanden |
+| Luftsensor getrennt | `air-sensor-fault`, `warning`, `disable-air-assist`, Wasserregelung laeuft weiter | Bestanden |
+| Luftsensor wieder verbunden | Rueckkehr auf `none` | Bestanden |
+| Wassersensor getrennt | `water-sensor-fault`, `critical`, `water-fallback`, `Final target PWM: 40%` | Bestanden |
+| Wassersensor wieder verbunden | Rueckkehr auf `none` | Bestanden |
+| Tachsignal getrennt | `fan-fault`, `critical`, `report-fan-fault`, `Fan ok: no` | Bestanden |
+| Tachsignal wieder verbunden | Rueckkehr auf `none` nach plausiblen Matches | Bestanden |
+| Fan mechanisch abgebremst | RPM ausserhalb Toleranz erzeugt `fan-fault` nach Mismatch-Debounce | Bestanden |
+| Fan wieder frei laufend | Rueckkehr auf `none` nach Recovery-Debounce | Bestanden |
+
+Der RPM-Abweichungstest zeigte beispielhaft:
+
+- `Measured RPM: 150`
+- `Expected RPM: 661`
+- `Tolerance RPM: +/-79`
+- `RPM error: -511`
+- `Plausible: no`
+- anschliessend `Fault latched: yes` und `Alarm code: fan-fault`
+
+Die beobachteten Zustandswechsel im RPM-Abweichungstest waren:
+
+```text
+none -> fan-fault -> none -> fan-fault -> none
+```
+
+## Offene Punkte
+
+- Kombinierte Mehrfachfehler wie Wassersensor plus Fanfehler sind im
+  Policy-Modell enthalten, aber nicht als eigener Hardwaretest blockierend.
+- Die Fan-Plausibilitaet sollte im final installierten Luftstrom erneut
+  beobachtet werden, falls die reale Montage die Drehzahlkurve merklich
+  veraendert.

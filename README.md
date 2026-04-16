@@ -56,10 +56,10 @@ Implemented and bench-verified:
 - target temperature persistence in ESP32 Preferences / NVS
 - strict default and fallback target temperature of `23.0 C`
 - serial diagnostics with sensor, fan, and alarm information
+- verified local fault policy for water sensor, air sensor, tach, and RPM deviation failures
 
 Still intentionally open:
 
-- final fault policy for confirmed fan faults
 - real-aquarium tuning of water and air control behavior
 - MQTT telemetry and remote configuration
 - OTA update path
@@ -78,11 +78,11 @@ Implemented now:
 - Safe fallback to `23.0 C` for invalid or missing target values
 - Tach plausibility diagnostics against the measured fan curve
 - Central fault-policy model with alarm severity and response labels
+- Hardware-verified fault responses for sensor failures and fan plausibility faults
 - Serial service commands for diagnostics and bench operation
 
 Planned next:
 
-- refined sensor and fan fault reaction policy
 - aquarium-side control tuning with live operating data
 - MQTT telemetry and remote parameter updates
 - OTA firmware updates over Wi-Fi
@@ -301,6 +301,11 @@ Verified controller milestone on hardware:
 - local water control behaves plausibly
 - first air-assist behavior behaves plausibly
 - fault policy reports alarm code, severity, response, service requirement, and degraded-cooling state
+- water-sensor failure enters `water-sensor-fault`, `critical`, and `water-fallback` at `40%` PWM
+- air-sensor failure enters `air-sensor-fault`, `warning`, and `disable-air-assist`
+- missing tach feedback enters `fan-fault`, `critical`, and `report-fan-fault`
+- slowed fan / RPM deviation outside tolerance enters `fan-fault` after the configured mismatch debounce
+- fan fault recovery returns to `none` after the configured plausible-match debounce
 
 Useful artifacts:
 
@@ -346,11 +351,11 @@ Useful artifacts:
 
 Next likely steps:
 
-1. Verify water-sensor, air-sensor, and fan-fault policy on hardware.
-2. Tune water and air control behavior with live aquarium data.
-3. Add MQTT telemetry and remote parameter updates.
-4. Add OTA support over Wi-Fi.
-5. Finalize enclosure, wiring, and installation layout for the real aquarium.
+1. Tune water and air control behavior with live aquarium data.
+2. Add MQTT telemetry and remote parameter updates.
+3. Add OTA support over Wi-Fi.
+4. Finalize enclosure, wiring, and installation layout for the real aquarium.
+5. Re-check fan plausibility in the installed airflow path if the final mounting changes airflow materially.
 
 ## Contributing
 
