@@ -410,6 +410,8 @@ Useful artifacts:
 - [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
 - [docs/aquarium-live-tests/2026-04-16-aquarium-2h-summary.md](docs/aquarium-live-tests/2026-04-16-aquarium-2h-summary.md)
 - [docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv)
+- [docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-summary.md](docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-summary.md)
+- [docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-fhem-export.csv)
 - [integrations/fhem/README.md](integrations/fhem/README.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
