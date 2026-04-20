@@ -200,6 +200,10 @@ Update model:
 - Characterization sketch is a standalone firmware artifact.
 - Production firmware is a separate artifact that reuses measured fan-curve
   data.
+- Production firmware releases shall use Semantic Versioning 2.0.0
+  (`MAJOR.MINOR.PATCH`) as defined by <https://semver.org/>.
+- Firmware release history shall be maintained in a `CHANGELOG.md` file using
+  the Keep a Changelog format defined by <https://keepachangelog.com/>.
 - Production firmware shall support OTA updates over the WLAN client.
 - OTA shall be treated as a non-critical service and shall not block local
   cooling startup.
@@ -431,6 +435,12 @@ Dependencies:
   local autonomous cooling beyond normal network-service initialization.
 - NFR-1.11 [Must]: OTA update integrity must be verifiable before a new
   firmware image is activated.
+- NFR-1.12 [Must]: Production firmware version numbers shall follow Semantic
+  Versioning 2.0.0 as `MAJOR.MINOR.PATCH`, with optional pre-release or build
+  metadata only when it conforms to the SemVer specification.
+- NFR-1.13 [Must]: The repository shall maintain release history in
+  `CHANGELOG.md` using the Keep a Changelog structure, including an
+  `Unreleased` section and grouped notable changes for each released version.
 
 ### 4.3 Constraints
 
@@ -479,6 +489,8 @@ Dependencies:
 - MQTT client library such as PubSubClient or equivalent
 - OTA-capable update library or ESP32 OTA support compatible with the chosen
   Arduino framework
+- Semantic Versioning 2.0.0 release numbering rules
+- Keep a Changelog release-history format
 - USB-C PD trigger hardware
 - Selected 4-pin PWM fan and DS18B20 sensors
 
@@ -613,6 +625,15 @@ the firmware does not yet subscribe to or validate remote `/set/...` topics.
 | `cooling_degraded` | bool | Whether local cooling effectiveness is degraded |
 | `service_required` | bool | Whether operator/service action is required |
 
+#### Firmware Release Metadata
+
+| Field | Type | Description |
+|---|---|---|
+| `firmware_version` | SemVer string | Production firmware version in `MAJOR.MINOR.PATCH` form, with optional SemVer-compliant pre-release or build metadata |
+| `release_date` | ISO date | Date assigned to the released firmware version in `CHANGELOG.md` |
+| `changelog_section` | Markdown section | Keep a Changelog release section containing grouped notable changes for the version |
+| `release_state` | enum/string | `unreleased`, `pre-release`, or `released` |
+
 ### 6.4 Commands / Opcodes
 
 The system does not define a custom binary command protocol. The current local
@@ -651,8 +672,10 @@ runtime command input.
 6. Flash the characterization sketch for first article testing.
 7. Record the measured fan curve and minimum stable PWM data.
 8. Integrate measured values into production firmware.
-9. Flash production firmware after control and fault parameters are finalized.
-10. Configure the OTA endpoint and verify the OTA path after Wi-Fi integration is
+9. Assign or update the production firmware SemVer version and update
+   `CHANGELOG.md` before building a release candidate.
+10. Flash production firmware after control and fault parameters are finalized.
+11. Configure the OTA endpoint and verify the OTA path after Wi-Fi integration is
    available.
 
 ### Provisioning / Configuration
@@ -687,7 +710,10 @@ runtime command input.
 4. Verify sensor ROM-ID assignment after replacing a DS18B20 sensor.
 5. Trigger and verify OTA updates only when the system is in a stable operating
    condition and the update source is trusted.
-6. Inspect enclosure mounting, cable strain relief, and terminal tightness
+6. Before publishing a firmware release, verify that the firmware version is a
+   valid SemVer value and that `CHANGELOG.md` contains a corresponding Keep a
+   Changelog release entry.
+7. Inspect enclosure mounting, cable strain relief, and terminal tightness
    during maintenance intervals.
 
 ### Recovery Procedures
@@ -754,6 +780,7 @@ runtime command input.
 | AT-07 | OTA success path | Offer a newer valid firmware image via Wi-Fi OTA endpoint | Firmware downloads, validates, activates, and reports success |
 | AT-08 | OTA failure rollback | Interrupt or invalidate OTA image during update test | Device preserves current working firmware and reports failure |
 | AT-09 | Installed enclosure concept | Install the full system in the intended rear upper mounting position | Electronics are centralized, accessible, and cable routing is practical |
+| AT-10 | Release versioning and changelog | Inspect a release candidate before publication | Firmware version follows SemVer 2.0.0 and `CHANGELOG.md` follows Keep a Changelog with a matching release entry |
 
 ### 8.4 Traceability Matrix
 
@@ -813,6 +840,8 @@ Status interpretation in this matrix:
 | NFR-1.9 | Must | TC-P1-01 | Covered |
 | NFR-1.10 | Must | TC-P2-14, AT-01 | Planned |
 | NFR-1.11 | Must | AT-07, AT-08 | Planned |
+| NFR-1.12 | Must | AT-10 | Planned |
+| NFR-1.13 | Must | AT-10 | Planned |
 
 ## 9. Troubleshooting Guide
 
@@ -856,10 +885,34 @@ Status interpretation in this matrix:
 | Hostname | `aq-cooling` |
 | MQTT root topic | `aquarium/cooling` |
 | FHEM integration | `integrations/fhem/aquarium-cooling-mqtt2-device.cfg` |
+| Changelog file | `CHANGELOG.md` |
 
 Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 
-### C. Mechanical Integration Summary
+### C. Versioning and Changelog Policy
+
+- Production firmware versions shall follow Semantic Versioning 2.0.0:
+  `MAJOR.MINOR.PATCH`.
+- During initial development, `0.y.z` versions may be used to indicate that
+  compatibility can still change before a stable `1.0.0` release.
+- Patch versions shall be used for backward-compatible bug fixes.
+- Minor versions shall be used for backward-compatible feature additions,
+  deprecations, or substantial compatible improvements.
+- Major versions shall be used for backward-incompatible changes to the
+  documented project surface, including serial commands, MQTT topics,
+  persisted configuration semantics, OTA compatibility, or documented control
+  behavior.
+- Pre-release and build metadata may be used only when the resulting version
+  string remains SemVer-compliant.
+- `CHANGELOG.md` shall follow Keep a Changelog and keep an `Unreleased`
+  section above released versions.
+- Changelog entries shall be grouped under the standard headings `Added`,
+  `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security` when those
+  categories apply.
+- Each published firmware version shall have a corresponding changelog release
+  section with the release date.
+
+### D. Mechanical Integration Summary
 
 | Item | Requirement |
 |---|---|
@@ -869,7 +922,7 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 | Preferred mounting position | Above aquarium frame, rear side, near lighting |
 | Design intent | Short cable runs, centralized electronics, serviceable installation |
 
-### D. Wiring Summary
+### E. Wiring Summary
 
 | Signal | Mapping |
 |---|---|
@@ -878,7 +931,7 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 | Fan Power | fan pin 2 -> +12 V, fan pin 1 -> GND |
 | DS18B20 bus | ESP32 GPIO33 shared 1-Wire bus with 3.3 kOhm pull-up to 3.3 V |
 
-### E. Verified Fan Characterization Result
+### F. Verified Fan Characterization Result
 
 Latest verified bench result on `2026-04-12` with `Noctua NF-S12A PWM`:
 
@@ -922,7 +975,7 @@ FanCurvePoint curve[] = {
 };
 ```
 
-### F. Open Points Requiring Finalization
+### G. Open Points Requiring Finalization
 
 - Final plausibility tolerance percentage after measured tuning
 - Final hardware implementation of PWM electrical compatibility
@@ -931,7 +984,7 @@ FanCurvePoint curve[] = {
 - Exact OTA manifest format, approval policy, and authentication details
 - Exact enclosure geometry, mounting method, and splash-protection details
 
-### G. Draft Schematic Sketch
+### H. Draft Schematic Sketch
 
 - Mermaid source: `docs/design/schematic-sketch.mmd`
 - Usage: paste the Mermaid source into draw.io via `Arrange -> Insert ->

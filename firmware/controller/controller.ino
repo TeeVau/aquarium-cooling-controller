@@ -14,6 +14,8 @@
 
 namespace {
 
+constexpr char kFirmwareName[] = "aq-cooling-controller";
+constexpr char kFirmwareVersion[] = "0.1.0";
 constexpr uint32_t kDiagnosticsIntervalMs = 2000;
 constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
@@ -81,6 +83,11 @@ void printHelp() {
 }
 
 void printCoreVersion() {
+  Serial.print("Firmware: ");
+  Serial.print(kFirmwareName);
+  Serial.print(" ");
+  Serial.println(kFirmwareVersion);
+
   Serial.print("ESP32 Arduino core: ");
   Serial.print(ESP_ARDUINO_VERSION_MAJOR);
   Serial.print(".");
@@ -335,6 +342,11 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
 
   Serial.println("Controller diagnostics:");
+  Serial.print("  Firmware: ");
+  Serial.print(kFirmwareName);
+  Serial.print(" ");
+  Serial.println(kFirmwareVersion);
+
   printControlDetails();
 
   Serial.print("  Applied PWM: ");

@@ -43,6 +43,8 @@ The repository currently contains both:
 
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
+Current firmware release: `0.1.0` (`2026-04-20`).
+
 Implemented and bench-verified:
 
 - PWM fan drive on the real output pin
@@ -69,6 +71,7 @@ Implemented and broker-verified:
 Still intentionally open:
 
 - real-aquarium tuning of water and air control behavior
+- longer real-aquarium live data capture after the first 2 h installed run
 - MQTT remote configuration
 - OTA update path
 
@@ -405,6 +408,8 @@ Useful artifacts:
 - [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
 - [docs/fault-policy-2026-04-16.md](docs/fault-policy-2026-04-16.md)
 - [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
+- [docs/aquarium-live-tests/2026-04-16-aquarium-2h-summary.md](docs/aquarium-live-tests/2026-04-16-aquarium-2h-summary.md)
+- [docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv)
 - [integrations/fhem/README.md](integrations/fhem/README.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
@@ -453,7 +458,7 @@ Useful artifacts:
 
 Next likely steps:
 
-1. Capture longer live aquarium data for water and air control tuning.
+1. Extend the first installed aquarium capture to longer live data for water and air control tuning.
 2. Add MQTT remote parameter updates with validation and persistence.
 3. Add OTA support over Wi-Fi.
 4. Finalize enclosure, wiring, and installation layout for the real aquarium.
