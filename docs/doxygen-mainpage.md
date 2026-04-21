@@ -17,6 +17,8 @@ This Doxygen site focuses on source-level API documentation.
 - Sensor manager: OneWire discovery and DS18B20 temperature sampling.
 - MQTT telemetry: network status and controller-state publishing.
 - OTA upload server: temporary browser-based firmware upload window.
+- Controller sketch: Arduino setup/loop orchestration, serial diagnostics, target
+  persistence, and module wiring.
 
 ## Generated Output
 

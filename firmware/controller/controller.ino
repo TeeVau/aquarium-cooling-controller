@@ -1,3 +1,26 @@
+/**
+ * @file controller.ino
+ * @brief Arduino sketch entry point for the aquarium cooling controller.
+ *
+ * The sketch wires the firmware modules together and owns the runtime loop. It
+ * initializes persistent target-temperature storage, temperature sensing, fan
+ * PWM output, tachometer RPM monitoring, fault evaluation, serial diagnostics,
+ * and optional MQTT telemetry.
+ *
+ * Runtime behavior is intentionally local-first: cooling control, fan safety
+ * monitoring, and diagnostics continue on the ESP32 even when Wi-Fi, MQTT, or
+ * external integrations are unavailable.
+ *
+ * Main loop order:
+ *
+ * - process serial commands,
+ * - update sensor conversions,
+ * - compute the fan PWM command,
+ * - apply PWM and update start boost,
+ * - update RPM sampling and MQTT connection state,
+ * - periodically evaluate faults, print diagnostics, and publish telemetry.
+ */
+
 #include <Arduino.h>
 
 #include <esp_arduino_version.h>
@@ -563,6 +586,14 @@ ControlInputs buildControlInputs(const SensorSnapshot& sensorSnapshot) {
 
 }  // namespace
 
+/**
+ * @brief Initializes hardware, persisted settings, diagnostics, and telemetry.
+ *
+ * Arduino calls this once after boot. The setup routine brings up serial output,
+ * non-volatile preferences, fan PWM, RPM capture, the OneWire sensor bus, and
+ * MQTT telemetry. It also prints the initial hardware configuration and the
+ * measured fan curve so bench bring-up can be verified from the serial monitor.
+ */
 void setup() {
   Serial.begin(115200);
   delay(1500);
@@ -617,6 +648,15 @@ void setup() {
   printHelp();
 }
 
+/**
+ * @brief Runs one non-blocking controller iteration.
+ *
+ * Arduino calls this repeatedly. Each iteration services serial commands,
+ * advances sensor sampling, recomputes the control snapshot, updates the fan
+ * output and RPM monitor, and maintains MQTT connectivity. Diagnostics and
+ * telemetry are emitted at kDiagnosticsIntervalMs so the controller loop remains
+ * responsive between reporting cycles.
+ */
 void loop() {
   const uint32_t nowMs = millis();
   processSerialInput();
