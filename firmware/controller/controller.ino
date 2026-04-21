@@ -11,7 +11,21 @@
  * monitoring, and diagnostics continue on the ESP32 even when Wi-Fi, MQTT, or
  * external integrations are unavailable.
  *
- * Main loop order:
+ * @section controller_circuit Circuit
+ *
+ * - DS18B20 water probe on the shared OneWire bus.
+ * - DS18B20 air probe on the same OneWire bus for warm-air assist.
+ * - Four-wire PWM fan controlled by ESP32 LEDC output.
+ * - Fan tachometer connected to an interrupt-capable ESP32 GPIO.
+ *
+ * @section controller_libraries Libraries
+ *
+ * - Arduino core for ESP32.
+ * - Preferences for persisted target-temperature storage.
+ * - OneWire and DallasTemperature through SensorManager.
+ * - PubSubClient and WiFi through MqttTelemetry.
+ *
+ * @section controller_loop_order Main Loop Order
  *
  * - process serial commands,
  * - update sensor conversions,
@@ -19,6 +33,18 @@
  * - apply PWM and update start boost,
  * - update RPM sampling and MQTT connection state,
  * - periodically evaluate faults, print diagnostics, and publish telemetry.
+ *
+ * @section controller_serial Serial Commands
+ *
+ * The serial monitor exposes bench and service commands for status output,
+ * target-temperature changes, default reset, air-assist settings, fault-policy
+ * settings, network status, and forced telemetry publishing.
+ *
+ * @section controller_notes Notes
+ *
+ * Keep this sketch focused on orchestration. Hardware abstractions and policy
+ * decisions live in dedicated modules so Doxygen pages remain navigable and the
+ * Arduino loop stays easy to audit.
  */
 
 #include <Arduino.h>

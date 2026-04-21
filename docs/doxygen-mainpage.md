@@ -2,7 +2,7 @@
 
 This generated documentation covers the ESP32 firmware interfaces for aquarium
 cooling control, fan PWM output, fan RPM monitoring, OneWire temperature
-sampling, MQTT telemetry, OTA upload handling, and fault policy decisions.
+sampling, MQTT telemetry, serial diagnostics, and fault policy decisions.
 
 Use the project README for setup, wiring, build, and operating instructions.
 This Doxygen site focuses on source-level API documentation.
@@ -16,9 +16,33 @@ This Doxygen site focuses on source-level API documentation.
 - Fault monitor and policy: fan plausibility, alarm state, severity, and response.
 - Sensor manager: OneWire discovery and DS18B20 temperature sampling.
 - MQTT telemetry: network status and controller-state publishing.
-- OTA upload server: temporary browser-based firmware upload window.
 - Controller sketch: Arduino setup/loop orchestration, serial diagnostics, target
   persistence, and module wiring.
+
+## Circuit Summary
+
+- ESP32 board running the Arduino core.
+- DS18B20 water sensor on the shared OneWire bus.
+- DS18B20 air sensor on the same OneWire bus for warm-air assist.
+- Four-wire PWM fan with separate PWM command and tachometer feedback.
+- MQTT telemetry is optional; local cooling continues without Wi-Fi or broker access.
+
+## Arduino Runtime
+
+The firmware follows the standard Arduino lifecycle:
+
+- `setup()` initializes serial diagnostics, preferences, sensors, fan PWM, RPM
+  sampling, and telemetry.
+- `loop()` remains non-blocking and repeatedly advances sensor sampling, control
+  calculation, PWM output, RPM measurement, fault evaluation, diagnostics, and
+  telemetry publishing.
+
+## Documentation Policy
+
+This site is generated with `WARN_AS_ERROR = YES`, so Doxygen warnings fail the
+GitHub Pages build. New firmware modules should include `@file` documentation,
+explicit API comments, and Arduino-specific notes for pins, timing, units, and
+runtime assumptions.
 
 ## Generated Output
 
