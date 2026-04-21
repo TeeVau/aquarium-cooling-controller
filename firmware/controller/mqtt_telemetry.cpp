@@ -1,3 +1,8 @@
+/**
+ * @file mqtt_telemetry.cpp
+ * @brief Implements Wi-Fi/MQTT connection maintenance and telemetry publishing.
+ */
+
 #include "mqtt_telemetry.h"
 
 #include <string.h>

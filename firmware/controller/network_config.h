@@ -1,5 +1,14 @@
 #pragma once
 
+/**
+ * @file network_config.h
+ * @brief Safe default Wi-Fi and MQTT configuration macros.
+ *
+ * Create `network_config.local.h` next to this file to override credentials and
+ * local broker settings. The local file is ignored by Git and is excluded from
+ * generated Doxygen output.
+ */
+
 // Safe defaults for the committed repository. Create
 // network_config.local.h next to this file to enable Wi-Fi/MQTT locally.
 

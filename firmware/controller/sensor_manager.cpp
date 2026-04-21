@@ -1,3 +1,8 @@
+/**
+ * @file sensor_manager.cpp
+ * @brief Implements OneWire sensor discovery and non-blocking temperature sampling.
+ */
+
 #include "sensor_manager.h"
 
 #include <string.h>

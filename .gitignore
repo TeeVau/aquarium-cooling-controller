@@ -9,6 +9,10 @@ build/
 dist/
 .pio/
 .arduino-build/
+docs/doxygen/
+html/
+latex/
+sqlite3.db
 *.bin
 *.elf
 *.map

@@ -1,3 +1,8 @@
+/**
+ * @file fan_driver.cpp
+ * @brief Implements ESP32 LEDC fan PWM output control.
+ */
+
 #include "fan_driver.h"
 
 FanDriver::FanDriver(const FanDriverConfig& config)

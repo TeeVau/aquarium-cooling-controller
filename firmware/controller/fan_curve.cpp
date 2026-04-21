@@ -1,3 +1,8 @@
+/**
+ * @file fan_curve.cpp
+ * @brief Implements measured fan curve interpolation and tolerance helpers.
+ */
+
 #include "fan_curve.h"
 
 namespace {

@@ -1,3 +1,8 @@
+/**
+ * @file control_engine.cpp
+ * @brief Implements temperature-based cooling PWM calculations.
+ */
+
 #include "control_engine.h"
 
 #include <math.h>

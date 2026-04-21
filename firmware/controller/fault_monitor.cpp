@@ -1,3 +1,8 @@
+/**
+ * @file fault_monitor.cpp
+ * @brief Implements fan RPM plausibility monitoring and fault latching.
+ */
+
 #include "fault_monitor.h"
 
 #include "fan_curve.h"

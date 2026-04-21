@@ -1,0 +1,26 @@
+PROJECT_NAME           = "Aquarium Cooling Controller"
+PROJECT_BRIEF          = "ESP32 firmware for aquarium cooling fan control, monitoring, telemetry, and fault handling."
+OUTPUT_DIRECTORY       = docs/doxygen
+INPUT                  = docs/doxygen-mainpage.md firmware/controller
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp *.c *.cpp *.ino *.md
+EXTENSION_MAPPING      = ino=C++
+USE_MDFILE_AS_MAINPAGE = docs/doxygen-mainpage.md
+EXCLUDE                = firmware/controller/network_config.local.h firmware/controller/build
+EXCLUDE_PATTERNS       = */.arduino-build/* */build/* */docs/doxygen/*
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+PREDEFINED             = IRAM_ATTR=
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_CLASSES     = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+QUIET                  = NO

@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file network_config.local.example.h
+ * @brief Example local network and MQTT override configuration.
+ */
+
 // Copy this file to network_config.local.h and fill in local credentials.
 // network_config.local.h is ignored by Git and must not be committed.
 

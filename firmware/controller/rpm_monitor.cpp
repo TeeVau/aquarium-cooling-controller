@@ -1,3 +1,8 @@
+/**
+ * @file rpm_monitor.cpp
+ * @brief Implements interrupt-driven fan tachometer sampling.
+ */
+
 #include "rpm_monitor.h"
 
 RpmMonitor* RpmMonitor::activeInstance_ = nullptr;

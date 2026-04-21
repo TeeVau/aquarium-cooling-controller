@@ -1,3 +1,8 @@
+/**
+ * @file fault_policy.cpp
+ * @brief Implements alarm selection and fault response policy.
+ */
+
 #include "fault_policy.h"
 
 namespace {
