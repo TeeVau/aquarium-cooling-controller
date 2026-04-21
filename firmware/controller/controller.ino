@@ -9,6 +9,7 @@
 #include "fault_monitor.h"
 #include "fault_policy.h"
 #include "mqtt_telemetry.h"
+#include "ota_upload_server.h"
 #include "rpm_monitor.h"
 #include "sensor_manager.h"
 
@@ -57,6 +58,7 @@ RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
 SensorManager sensorManager(kSensorManagerConfig);
 MqttTelemetry mqttTelemetry;
+OtaUploadServer otaUploadServer;
 Preferences preferences;
 ControlSnapshot lastControlSnapshot = {};
 FaultMonitorSnapshot lastFaultSnapshot = {};
@@ -78,6 +80,9 @@ void printHelp() {
   Serial.println("  faults        -> print current fault-policy defaults");
   Serial.println("  network       -> print Wi-Fi/MQTT telemetry status");
   Serial.println("  publish       -> publish telemetry immediately when MQTT is connected");
+  Serial.println("  ota status    -> print OTA upload status");
+  Serial.println("  ota enable    -> open temporary OTA .bin upload window");
+  Serial.println("  ota cancel    -> close OTA upload window");
   Serial.println("  help          -> show this help");
   Serial.println();
 }
@@ -335,6 +340,25 @@ void printFaultPolicyDefaults() {
   Serial.println(" ms");
 }
 
+bool otaEnableAllowed(Stream& out) {
+  if (!lastFaultSnapshotValid) {
+    out.println("OTA upload not enabled. Wait for the first diagnostics cycle.");
+    return false;
+  }
+
+  if (lastFaultPolicySnapshot.severity == FaultSeverity::kCritical) {
+    out.println("OTA upload not enabled while a critical fault is active.");
+    return false;
+  }
+
+  if (fanDriver.isStartBoostActive()) {
+    out.println("OTA upload not enabled while fan start boost is active.");
+    return false;
+  }
+
+  return true;
+}
+
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
                       const FaultPolicySnapshot& policySnapshot,
                       uint32_t sampleAgeMs,
@@ -463,6 +487,23 @@ void handleSerialCommand(const char* command) {
 
   if (strcmp(command, "network") == 0) {
     mqttTelemetry.printStatus(Serial);
+    return;
+  }
+
+  if (strcmp(command, "ota status") == 0 || strcmp(command, "ota") == 0) {
+    otaUploadServer.printStatus(Serial);
+    return;
+  }
+
+  if (strcmp(command, "ota enable") == 0) {
+    if (otaEnableAllowed(Serial)) {
+      otaUploadServer.enable(millis(), Serial);
+    }
+    return;
+  }
+
+  if (strcmp(command, "ota cancel") == 0) {
+    otaUploadServer.cancel(Serial);
     return;
   }
 
@@ -613,6 +654,7 @@ void setup() {
   printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
   mqttTelemetry.begin(millis());
+  otaUploadServer.begin(kFirmwareName, kFirmwareVersion);
   mqttTelemetry.printStatus(Serial);
   printHelp();
 }
@@ -629,6 +671,7 @@ void loop() {
   fanDriver.update(nowMs);
   rpmMonitor.update(nowMs);
   mqttTelemetry.update(nowMs);
+  otaUploadServer.update(nowMs);
 
   if (nowMs - lastDiagnosticsMs < kDiagnosticsIntervalMs) {
     return;

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added first BIN-only OTA upload implementation with a temporary ESP32-hosted
+  upload endpoint and serial `ota status`, `ota enable`, and `ota cancel`
+  commands.
+
+### Changed
+
+- Updated the OTA specification to use a manual BIN-only ESP32 upload
+  maintenance mode without ZIP archives, manifests, external update polling,
+  passwords, or tokens.
+
 ## [0.1.0] - 2026-04-20
 
 ### Added
