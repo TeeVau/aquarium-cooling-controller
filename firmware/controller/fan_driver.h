@@ -3,12 +3,21 @@
 /**
  * @file fan_driver.h
  * @brief PWM fan output driver with low-speed start boost.
+ *
+ * The driver hides ESP32 LEDC details behind a percent-based interface and
+ * keeps track of both the requested PWM and the value currently applied to the
+ * hardware. A short boost can be applied when a stopped fan is asked to start
+ * below its reliable spin-up threshold.
  */
 
 #include <Arduino.h>
 
 /**
  * @brief PWM output settings for the cooling fan.
+ *
+ * These values are hardware-facing and should match the fan wiring and desired
+ * acoustic behavior. The PWM frequency and resolution are passed directly to
+ * the ESP32 LEDC API.
  */
 struct FanDriverConfig {
   uint8_t pwmPin;                ///< GPIO used for fan PWM output.
@@ -31,6 +40,11 @@ constexpr FanDriverConfig kDefaultFanDriverConfig = {
 
 /**
  * @brief Drives the cooling fan with an ESP32 LEDC PWM output.
+ *
+ * Commands are expressed in percent so the rest of the controller does not need
+ * to know the PWM resolution. The class also keeps the last commanded value
+ * separate from the applied value because start boost can temporarily apply a
+ * higher PWM than the steady-state command.
  */
 class FanDriver {
  public:
@@ -52,7 +66,8 @@ class FanDriver {
    * @brief Sets the desired fan PWM command.
    *
    * A start boost is applied automatically when a stopped fan is commanded to a
-   * low nonzero PWM value.
+   * low nonzero PWM value. Commands are clamped to the 0 to 100 percent range
+   * before they are stored or written to the hardware.
    *
    * @param pwmPercent Desired fan command from 0 to 100 percent.
    * @param nowMs Current monotonic timestamp in milliseconds.

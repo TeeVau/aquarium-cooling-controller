@@ -3,12 +3,20 @@
 /**
  * @file fault_monitor.h
  * @brief Fan RPM plausibility monitor with latched fault recovery.
+ *
+ * The monitor compares measured tachometer RPM against the expected fan curve
+ * after a settling delay. It debounces both failure and recovery so transient
+ * fan speed deviations do not immediately toggle the service state.
  */
 
 #include <Arduino.h>
 
 /**
  * @brief Fault detection thresholds for fan RPM plausibility.
+ *
+ * The mismatch and match counters define how many consecutive samples are
+ * required before the monitor changes state. This keeps the policy layer simple:
+ * it only needs to consume the latched result from the latest snapshot.
  */
 struct FaultMonitorConfig {
   uint8_t mismatchCyclesRequired;         ///< Consecutive bad samples required to latch a fault.
@@ -18,6 +26,11 @@ struct FaultMonitorConfig {
 
 /**
  * @brief Diagnostic result from one fan fault-monitor evaluation.
+ *
+ * This snapshot is designed for both telemetry and policy decisions. It exposes
+ * the raw RPM comparison, counter state, and latch state so a user can see
+ * whether a fan alarm is caused by an active mismatch or by a fault that is
+ * still recovering.
  */
 struct FaultMonitorSnapshot {
   uint8_t commandedPwmPercent;      ///< Current fan PWM command in percent.
@@ -44,6 +57,10 @@ constexpr FaultMonitorConfig kDefaultFaultMonitorConfig = {
 
 /**
  * @brief Tracks fan RPM plausibility and latches persistent fan faults.
+ *
+ * The class watches for PWM command changes, waits for fan speed to settle, and
+ * then compares measured RPM against the interpolated fan curve. A latched fault
+ * clears only after enough consecutive plausible samples have been observed.
  */
 class FaultMonitor {
  public:

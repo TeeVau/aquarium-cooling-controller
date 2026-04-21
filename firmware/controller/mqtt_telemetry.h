@@ -3,6 +3,10 @@
 /**
  * @file mqtt_telemetry.h
  * @brief Wi-Fi and MQTT telemetry publisher for controller state.
+ *
+ * The telemetry layer is optional at runtime. Local cooling continues even when
+ * Wi-Fi credentials are missing, the broker is unavailable, or MQTT publishing
+ * fails.
  */
 
 #include <Arduino.h>
@@ -15,6 +19,11 @@
 
 /**
  * @brief Maintains Wi-Fi/MQTT connections and publishes controller telemetry.
+ *
+ * Connection management is non-blocking from the caller's point of view: update()
+ * performs periodic reconnect attempts while publishTelemetry() emits the latest
+ * controller state when a broker connection is available. Topic names and
+ * credentials come from the network configuration macros.
  */
 class MqttTelemetry {
  public:
@@ -39,6 +48,10 @@ class MqttTelemetry {
 
   /**
    * @brief Publishes a complete telemetry snapshot when connected.
+   *
+   * The payload is split across stable topic suffixes so FHEM or other home
+   * automation integrations can subscribe to individual state values. When
+   * force is false, the method respects the configured publish interval.
    *
    * @param nowMs Current monotonic timestamp in milliseconds.
    * @param controlSnapshot Latest control-engine state.

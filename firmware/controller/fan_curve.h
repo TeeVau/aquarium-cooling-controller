@@ -3,12 +3,20 @@
 /**
  * @file fan_curve.h
  * @brief Measured fan PWM-to-RPM curve and plausibility helpers.
+ *
+ * The curve represents the production fan used by the controller. It is shared
+ * by diagnostics and fault detection so expected RPM values are calculated from
+ * the same measured data that is shown over serial output.
  */
 
 #include <Arduino.h>
 
 /**
  * @brief One measured point in the fan curve.
+ *
+ * Points are ordered by increasing PWM and are used for linear interpolation.
+ * The first and last entries also act as the clamp values for commands outside
+ * the measured range.
  */
 struct FanCurvePoint {
   uint8_t pwmPercent; ///< Fan PWM command in percent.
@@ -16,6 +24,14 @@ struct FanCurvePoint {
 };
 
 namespace FanCurve {
+
+/**
+ * @namespace FanCurve
+ * @brief Fan characterization table and interpolation helpers.
+ *
+ * The namespace exposes read-only access to measured curve points and helper
+ * functions for converting PWM commands into expected RPM and allowed tolerance.
+ */
 
 constexpr uint8_t kStartPwmPercent = 12;                ///< PWM where the fan reliably starts.
 constexpr uint8_t kMinimumHoldPwmPercent = 10;          ///< Lowest PWM used after the fan is spinning.
@@ -38,6 +54,10 @@ const FanCurvePoint* points();
 
 /**
  * @brief Interpolates the expected RPM for a PWM command.
+ *
+ * Values between measured points are linearly interpolated and rounded to the
+ * nearest integer RPM. Values outside the curve range are clamped to the nearest
+ * measured endpoint.
  *
  * @param pwmPercent Fan PWM command in percent.
  * @return Expected fan speed in RPM.

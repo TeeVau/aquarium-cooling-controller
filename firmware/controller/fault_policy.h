@@ -3,6 +3,10 @@
 /**
  * @file fault_policy.h
  * @brief Converts sensor and fan health into alarms, severity, and responses.
+ *
+ * The policy layer keeps fault interpretation separate from control calculation
+ * and raw fan plausibility checks. It turns those lower-level snapshots into
+ * user-facing alarm codes and high-level response categories for telemetry.
  */
 
 #include <Arduino.h>
@@ -12,6 +16,10 @@
 
 /**
  * @brief Stable alarm identifiers for telemetry and diagnostics.
+ *
+ * Alarm codes are deliberately coarse and stable. They describe the externally
+ * relevant fault combination instead of exposing every internal counter or
+ * plausibility detail from the monitor.
  */
 enum class AlarmCode : uint8_t {
   kNone,                   ///< No active alarm.
@@ -25,6 +33,10 @@ enum class AlarmCode : uint8_t {
 
 /**
  * @brief Severity assigned to the current fault state.
+ *
+ * Severity expresses how much attention the fault needs. Air-sensor faults are
+ * warnings because water control can continue, while water-sensor and fan faults
+ * are critical because cooling quality or cooling capacity is degraded.
  */
 enum class FaultSeverity : uint8_t {
   kNone,     ///< No service action required.
@@ -34,6 +46,10 @@ enum class FaultSeverity : uint8_t {
 
 /**
  * @brief Control response selected for the current fault state.
+ *
+ * The response is a compact explanation of how the firmware should behave under
+ * the current fault combination. It is also published to MQTT so external
+ * integrations can react without duplicating firmware policy logic.
  */
 enum class FaultResponse : uint8_t {
   kNormalControl,                  ///< Continue normal control behavior.
@@ -45,6 +61,10 @@ enum class FaultResponse : uint8_t {
 
 /**
  * @brief Complete policy decision for diagnostics and telemetry.
+ *
+ * The snapshot combines boolean health flags with the selected alarm, severity,
+ * and response. It is intentionally redundant enough to make serial output and
+ * MQTT payloads understandable without cross-referencing multiple modules.
  */
 struct FaultPolicySnapshot {
   AlarmCode alarmCode;        ///< Selected alarm code.
@@ -59,6 +79,15 @@ struct FaultPolicySnapshot {
 };
 
 namespace FaultPolicy {
+
+/**
+ * @namespace FaultPolicy
+ * @brief Fault classification and telemetry labeling helpers.
+ *
+ * The namespace consumes already-computed control and fan-monitor snapshots.
+ * It does not read sensors or drive hardware; it only classifies the current
+ * state and returns stable labels for diagnostics.
+ */
 
 /**
  * @brief Evaluates alarms and fault response from control and fan-monitor state.

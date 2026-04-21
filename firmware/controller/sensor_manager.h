@@ -3,6 +3,11 @@
 /**
  * @file sensor_manager.h
  * @brief OneWire temperature sensor discovery, assignment, and sampling.
+ *
+ * The manager handles fixed sensor roles on a shared OneWire bus. It tracks
+ * whether expected ROM codes were found, keeps a small discovery list for
+ * diagnostics, and performs temperature conversion as a non-blocking state
+ * machine.
  */
 
 #include <Arduino.h>
@@ -14,6 +19,10 @@ constexpr size_t kMaxDiscoveredSensors = 4; ///< Maximum discovered OneWire devi
 
 /**
  * @brief Configuration for one named temperature sensor.
+ *
+ * A tracked sensor is a role used by the control logic, such as water or air.
+ * Preferred ROM codes keep those roles stable even when more devices are present
+ * on the bus.
  */
 struct TrackedSensorConfig {
   bool hasPreferredAddress;      ///< True when preferredAddress should be matched.
@@ -23,6 +32,10 @@ struct TrackedSensorConfig {
 
 /**
  * @brief Latest sample and identity data for one tracked sensor.
+ *
+ * The snapshot separates address discovery from sample validity. This makes it
+ * possible to diagnose whether a role is missing entirely, discovered but not
+ * sampled yet, or sampled with an invalid temperature value.
  */
 struct TrackedSensorSnapshot {
   bool configuredAddressMatched; ///< True when the preferred ROM code was found.
@@ -36,6 +49,9 @@ struct TrackedSensorSnapshot {
 
 /**
  * @brief Diagnostic data for one discovered OneWire sensor.
+ *
+ * Discovered sensors are retained even when they are not assigned to a tracked
+ * role. This helps identify swapped probes or unexpected devices on the bus.
  */
 struct DiscoveredSensorSnapshot {
   bool present;           ///< True when this entry contains a discovered device.
@@ -46,6 +62,10 @@ struct DiscoveredSensorSnapshot {
 
 /**
  * @brief OneWire bus and temperature sampling configuration.
+ *
+ * The configuration is copied into the manager and used for discovery, DS18B20
+ * resolution setup, and conversion scheduling. trackedSensorCount must not
+ * exceed kMaxTrackedSensors.
  */
 struct SensorManagerConfig {
   uint8_t oneWirePin;                                      ///< GPIO used for the OneWire bus.
@@ -57,6 +77,10 @@ struct SensorManagerConfig {
 
 /**
  * @brief Complete OneWire bus and sensor state snapshot.
+ *
+ * The snapshot is the single source of sensor state for control, serial
+ * diagnostics, and telemetry. Callers read it after update() without needing to
+ * interact with the OneWire or DallasTemperature libraries directly.
  */
 struct SensorSnapshot {
   bool busInitialized;                                           ///< True after the OneWire bus is initialized.
@@ -71,6 +95,10 @@ struct SensorSnapshot {
 
 /**
  * @brief Discovers and samples DS18B20-compatible sensors on a OneWire bus.
+ *
+ * The class performs discovery, starts conversions, and later collects results
+ * once the conversion time for the selected resolution has elapsed. This avoids
+ * blocking the controller loop while still keeping tracked sensor roles stable.
  */
 class SensorManager {
  public:
@@ -91,6 +119,10 @@ class SensorManager {
 
   /**
    * @brief Advances discovery and temperature conversion state.
+   *
+   * Call this frequently from the main loop. It will request a new conversion
+   * when the sample interval elapses and will finish pending conversions once
+   * the DS18B20 conversion time has passed.
    *
    * @param nowMs Current monotonic timestamp in milliseconds.
    */

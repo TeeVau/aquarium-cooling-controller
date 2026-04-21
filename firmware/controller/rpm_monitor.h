@@ -3,12 +3,20 @@
 /**
  * @file rpm_monitor.h
  * @brief Tachometer pulse counting and RPM sampling for the cooling fan.
+ *
+ * The RPM monitor converts interrupt-counted tachometer pulses into a sampled
+ * speed value. It is intentionally small so the interrupt path only increments a
+ * counter while the main loop performs RPM calculation at the configured window.
  */
 
 #include <Arduino.h>
 
 /**
  * @brief Configuration for fan tachometer sampling.
+ *
+ * The tachometer pin is configured with the ESP32 internal pull-up and counted
+ * on falling edges. pulsesPerRevolution must match the fan tach output so RPM
+ * calculation remains meaningful.
  */
 struct RpmMonitorConfig {
   uint8_t tachPin;              ///< GPIO connected to the fan tachometer output.
@@ -32,6 +40,10 @@ constexpr RpmMonitorConfig kDefaultRpmMonitorConfig = {
  * edges, and converts each completed sample window to revolutions per minute.
  * Only one active instance is supported because the interrupt trampoline is
  * shared.
+ *
+ * RPM is rounded to the nearest integer over the elapsed sample window. Reading
+ * and clearing the volatile pulse counter is protected by temporarily disabling
+ * interrupts, keeping the ISR simple and the sampling result consistent.
  */
 class RpmMonitor {
  public:

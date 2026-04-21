@@ -3,12 +3,20 @@
 /**
  * @file control_engine.h
  * @brief Computes cooling PWM commands from temperature inputs and policy limits.
+ *
+ * This module is intentionally independent from sensors, networking, and PWM
+ * hardware. It turns already-sampled temperatures into a deterministic control
+ * decision that can be unit-tested without an ESP32 runtime.
  */
 
 #include <Arduino.h>
 
 /**
  * @brief Tunable limits and ramp settings for cooling control.
+ *
+ * The configuration describes the safe operating envelope for water-temperature
+ * control and optional ambient-air assist. Temperature values are expressed in
+ * degrees Celsius and PWM values use the controller-wide 0 to 100 percent scale.
  */
 struct ControlConfig {
   float defaultTargetTemperatureC;     ///< Fallback target water temperature in degrees Celsius.
@@ -26,6 +34,11 @@ struct ControlConfig {
 
 /**
  * @brief Sensor and target inputs for one control calculation.
+ *
+ * Inputs are supplied as a snapshot so the control engine does not own sensor
+ * polling, persistence, or validation state. Invalid temperature samples remain
+ * visible through the validity flags and are converted to fallback behavior by
+ * compute().
  */
 struct ControlInputs {
   bool hasConfiguredTargetTemperature; ///< True when a user-configured target should be considered.
@@ -38,6 +51,10 @@ struct ControlInputs {
 
 /**
  * @brief Operating mode selected by the control engine.
+ *
+ * The mode explains why the final PWM command was selected. It is used in
+ * diagnostics and telemetry so users can distinguish normal water control,
+ * air-assist overrides, and water-sensor fallback operation.
  */
 enum class ControlMode : uint8_t {
   kWaterControl,              ///< Water sensor drives the final PWM command.
@@ -47,6 +64,10 @@ enum class ControlMode : uint8_t {
 
 /**
  * @brief Complete result of one control calculation.
+ *
+ * The snapshot preserves both the final output and the intermediate values used
+ * to reach it. Keeping those values together makes serial diagnostics and MQTT
+ * telemetry explain the control decision without recalculating it elsewhere.
  */
 struct ControlSnapshot {
   float targetTemperatureC;       ///< Effective target water temperature in degrees Celsius.
@@ -82,6 +103,15 @@ constexpr ControlConfig kDefaultControlConfig = {
 namespace ControlEngine {
 
 /**
+ * @namespace ControlEngine
+ * @brief Pure cooling-control calculations.
+ *
+ * Functions in this namespace avoid direct hardware access. Callers provide
+ * sensor validity and temperature values, and the namespace returns the PWM
+ * decision plus stable labels for logs and telemetry.
+ */
+
+/**
  * @brief Checks whether a target temperature is finite and inside configured limits.
  *
  * @param targetTemperatureC Candidate target temperature in degrees Celsius.
@@ -103,6 +133,11 @@ float sanitizeTargetTemperature(float targetTemperatureC,
 
 /**
  * @brief Computes the fan command and control mode for the current inputs.
+ *
+ * Water temperature is the primary control variable. When air assist is enabled
+ * and the air sensor is valid, the final PWM is the larger of the water-based
+ * command and the air-assist command. If the water sensor is invalid, the
+ * configured fallback PWM is used.
  *
  * @param inputs Sensor validity, measured temperatures, and requested target.
  * @param config Control limits and ramp settings.
