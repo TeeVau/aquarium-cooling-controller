@@ -5,6 +5,7 @@
 
 #include "ota_upload_server.h"
 
+#include <ESP.h>
 #include <Update.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>

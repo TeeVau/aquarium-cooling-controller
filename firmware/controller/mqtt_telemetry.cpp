@@ -7,12 +7,18 @@
 
 #include <string.h>
 
+#include "display_format.h"
 #include "network_config.h"
 
 namespace {
 
 constexpr size_t kTopicBufferSize = 96;
 constexpr size_t kPayloadBufferSize = 32;
+constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
+constexpr char kSetAirAssistEnableSuffix[] = "/set/air_assist_enable";
+constexpr char kSetAirAssistMinimumPwmSuffix[] = "/set/air_min_pwm_percent";
+
+MqttTelemetry* gActiveMqttTelemetry = nullptr;
 
 const char* wifiStatusLabel(wl_status_t status) {
   switch (status) {
@@ -40,6 +46,8 @@ const char* wifiStatusLabel(wl_status_t status) {
 MqttTelemetry::MqttTelemetry()
     : wifiClient_(),
       mqttClient_(wifiClient_),
+      remoteConfigCallback_(nullptr),
+      remoteConfigContext_(nullptr),
       initialized_(false),
       wifiBeginIssued_(false),
       lastWifiAttemptMs_(0),
@@ -63,6 +71,8 @@ void MqttTelemetry::begin(uint32_t nowMs) {
   mqttClient_.setServer(AQ_MQTT_HOST, AQ_MQTT_PORT);
   mqttClient_.setKeepAlive(15);
   mqttClient_.setSocketTimeout(2);
+  mqttClient_.setCallback(MqttTelemetry::mqttMessageThunk);
+  gActiveMqttTelemetry = this;
 }
 
 void MqttTelemetry::update(uint32_t nowMs) {
@@ -85,8 +95,10 @@ void MqttTelemetry::update(uint32_t nowMs) {
 
 bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                                      const ControlSnapshot& controlSnapshot,
+                                     const SettingsTelemetrySnapshot& settingsSnapshot,
                                      const FaultMonitorSnapshot& faultSnapshot,
                                      const FaultPolicySnapshot& policySnapshot,
+                                     const RemoteConfigStatus& remoteConfigStatus,
                                      bool force) {
   if (!enabled() || !mqttConnected()) {
     return false;
@@ -107,6 +119,10 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                                   true,
                                   controlSnapshot.targetTemperatureC,
                                   true);
+  ok &= publishBool("/state/air_assist_enable", settingsSnapshot.airAssistEnabled, true);
+  ok &= publishUInt("/state/air_min_pwm_percent",
+                    settingsSnapshot.airAssistMinimumPwmPercent,
+                    true);
   ok &= publishUInt("/state/fan_pwm_percent", controlSnapshot.finalPwmPercent);
   ok &= publishUInt("/state/fan_rpm", faultSnapshot.measuredRpm);
   ok &= publishText("/state/controller_mode",
@@ -138,13 +154,37 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
   ok &= publishText("/status/fault_response",
                     FaultPolicy::responseLabel(policySnapshot.response),
                     true);
+  ok &= publishText("/status/remote_config_last_result",
+                    remoteConfigStatus.lastCommandSeen
+                        ? (remoteConfigStatus.lastCommandAccepted ? "accepted" : "rejected")
+                        : "none",
+                    true);
+  ok &= publishText("/status/remote_config_last_key",
+                    remoteConfigStatus.lastCommandSeen ? remoteConfigStatus.lastKey : "none",
+                    true);
+  ok &= publishText(
+      "/status/remote_config_last_detail",
+      remoteConfigStatus.lastCommandSeen ? remoteConfigStatus.lastDetail : "none",
+      true);
   ok &= publishText("/status/availability", "online", true);
+  ok &= publishUInt("/diagnostic/remote_config_accept_count",
+                    remoteConfigStatus.acceptedCount,
+                    true);
+  ok &= publishUInt("/diagnostic/remote_config_reject_count",
+                    remoteConfigStatus.rejectedCount,
+                    true);
 
   if (ok) {
     lastPublishMs_ = nowMs;
   }
 
   return ok;
+}
+
+void MqttTelemetry::setRemoteConfigCallback(RemoteConfigCallback callback,
+                                            void* context) {
+  remoteConfigCallback_ = callback;
+  remoteConfigContext_ = context;
 }
 
 void MqttTelemetry::printStatus(Stream& out) {
@@ -172,6 +212,8 @@ void MqttTelemetry::printStatus(Stream& out) {
   out.print("  Publish interval: ");
   out.print(AQ_MQTT_PUBLISH_INTERVAL_MS);
   out.println(" ms");
+  out.print("  Remote config subscribed: ");
+  out.println(remoteConfigCallback_ != nullptr && mqttConnected() ? "yes" : "no");
 }
 
 bool MqttTelemetry::enabled() const {
@@ -248,10 +290,39 @@ bool MqttTelemetry::connectMqtt() {
   }
 
   if (connected) {
+    if (!subscribeRemoteConfigTopics()) {
+      mqttClient_.disconnect();
+      return false;
+    }
+
     publishText("/status/availability", "online", true);
   }
 
   return connected;
+}
+
+bool MqttTelemetry::subscribeRemoteConfigTopics() {
+  if (remoteConfigCallback_ == nullptr) {
+    return true;
+  }
+
+  char topic[kTopicBufferSize] = {};
+  if (!buildTopic(kSetTargetTemperatureSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  if (!buildTopic(kSetAirAssistEnableSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  if (!buildTopic(kSetAirAssistMinimumPwmSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  return true;
 }
 
 bool MqttTelemetry::publishText(const char* suffix,
@@ -292,7 +363,7 @@ bool MqttTelemetry::publishFloatOrUnavailable(const char* suffix,
   }
 
   char payload[kPayloadBufferSize] = {};
-  snprintf(payload, sizeof(payload), "%.2f", value);
+  DisplayFormat::formatTemperatureC(value, payload, sizeof(payload));
   return publishText(suffix, payload, retained);
 }
 
@@ -301,4 +372,49 @@ bool MqttTelemetry::buildTopic(const char* suffix,
                                size_t topicSize) const {
   const int written = snprintf(topic, topicSize, "%s%s", AQ_MQTT_ROOT_TOPIC, suffix);
   return written > 0 && (size_t)written < topicSize;
+}
+
+void MqttTelemetry::handleMqttMessage(char* topic,
+                                      const uint8_t* payload,
+                                      unsigned int length) {
+  if (remoteConfigCallback_ == nullptr || topic == nullptr) {
+    return;
+  }
+
+  char expectedTopic[kTopicBufferSize] = {};
+  if (buildTopic(kSetTargetTemperatureSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetTargetTemperatureSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetAirAssistEnableSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetAirAssistEnableSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetAirAssistMinimumPwmSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetAirAssistMinimumPwmSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+  }
+}
+
+void MqttTelemetry::mqttMessageThunk(char* topic,
+                                     uint8_t* payload,
+                                     unsigned int length) {
+  if (gActiveMqttTelemetry == nullptr) {
+    return;
+  }
+
+  gActiveMqttTelemetry->handleMqttMessage(topic, payload, length);
 }

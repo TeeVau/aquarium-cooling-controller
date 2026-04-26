@@ -63,6 +63,11 @@ bool isTargetTemperatureValid(float targetTemperatureC, const ControlConfig& con
          targetTemperatureC <= config.maximumTargetTemperatureC;
 }
 
+bool isAirAssistMinimumPwmValid(uint8_t minimumPwmPercent,
+                                const ControlConfig& config) {
+  return minimumPwmPercent <= config.airAssistMaximumPwmPercent;
+}
+
 float sanitizeTargetTemperature(float targetTemperatureC, const ControlConfig& config) {
   if (isTargetTemperatureValid(targetTemperatureC, config)) {
     return targetTemperatureC;

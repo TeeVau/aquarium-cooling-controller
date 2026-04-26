@@ -54,6 +54,7 @@
 #include <Preferences.h>
 
 #include "control_engine.h"
+#include "display_format.h"
 #include "fan_driver.h"
 #include "fan_curve.h"
 #include "fault_monitor.h"
@@ -79,6 +80,14 @@ constexpr size_t kAirSensorIndex = 1;
 constexpr char kPreferencesNamespace[] = "controller";
 constexpr char kKeyHasCustomTarget[] = "target_set";
 constexpr char kKeyTargetTemperature[] = "target_c";
+constexpr char kKeyHasCustomAirAssistEnabled[] = "air_en_set";
+constexpr char kKeyAirAssistEnabled[] = "air_en";
+constexpr char kKeyHasCustomAirAssistMinimumPwm[] = "air_min_set";
+constexpr char kKeyAirAssistMinimumPwm[] = "air_min_pwm";
+constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
+constexpr char kSetAirAssistEnableSuffix[] = "/set/air_assist_enable";
+constexpr char kSetAirAssistMinimumPwmSuffix[] = "/set/air_min_pwm_percent";
+constexpr size_t kRemoteConfigPayloadBufferSize = 32;
 
 constexpr uint8_t kWaterSensorRomCode[8] = {
     0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB,
@@ -114,14 +123,23 @@ SensorManager sensorManager(kSensorManagerConfig);
 MqttTelemetry mqttTelemetry;
 OtaUploadServer otaUploadServer;
 Preferences preferences;
+ControlConfig runtimeControlConfig = kDefaultControlConfig;
 ControlSnapshot lastControlSnapshot = {};
 FaultMonitorSnapshot lastFaultSnapshot = {};
 FaultPolicySnapshot lastFaultPolicySnapshot = {};
+SettingsTelemetrySnapshot settingsTelemetrySnapshot = {
+    kDefaultControlConfig.airAssistEnabled,
+    kDefaultControlConfig.airAssistMinimumPwmPercent,
+};
+RemoteConfigStatus remoteConfigStatus = {};
 uint32_t lastDiagnosticsMs = 0;
 float requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
 bool hasConfiguredTargetTemperature = false;
+bool hasConfiguredAirAssistEnabled = false;
+bool hasConfiguredAirAssistMinimumPwm = false;
 bool preferencesReady = false;
 bool lastFaultSnapshotValid = false;
+bool telemetryPublishRequested = false;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
 
@@ -197,6 +215,37 @@ bool beginPreferences() {
   return preferencesReady;
 }
 
+void syncSettingsTelemetrySnapshot() {
+  settingsTelemetrySnapshot.airAssistEnabled = runtimeControlConfig.airAssistEnabled;
+  settingsTelemetrySnapshot.airAssistMinimumPwmPercent =
+      runtimeControlConfig.airAssistMinimumPwmPercent;
+}
+
+void requestTelemetryPublish() {
+  telemetryPublishRequested = true;
+}
+
+void setRemoteConfigStatus(bool accepted, const char* key, const char* detail) {
+  remoteConfigStatus.lastCommandSeen = true;
+  remoteConfigStatus.lastCommandAccepted = accepted;
+
+  if (accepted) {
+    ++remoteConfigStatus.acceptedCount;
+  } else {
+    ++remoteConfigStatus.rejectedCount;
+  }
+
+  snprintf(remoteConfigStatus.lastKey,
+           sizeof(remoteConfigStatus.lastKey),
+           "%s",
+           key != nullptr ? key : "unknown");
+  snprintf(remoteConfigStatus.lastDetail,
+           sizeof(remoteConfigStatus.lastDetail),
+           "%s",
+           detail != nullptr ? detail : "none");
+  requestTelemetryPublish();
+}
+
 void clearPersistedTargetTemperature() {
   if (!preferencesReady) {
     return;
@@ -213,6 +262,42 @@ void persistTargetTemperature(float targetTemperatureC) {
 
   preferences.putBool(kKeyHasCustomTarget, true);
   preferences.putFloat(kKeyTargetTemperature, targetTemperatureC);
+}
+
+void clearPersistedAirAssistEnabled() {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.remove(kKeyHasCustomAirAssistEnabled);
+  preferences.remove(kKeyAirAssistEnabled);
+}
+
+void persistAirAssistEnabled(bool enabled) {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.putBool(kKeyHasCustomAirAssistEnabled, true);
+  preferences.putBool(kKeyAirAssistEnabled, enabled);
+}
+
+void clearPersistedAirAssistMinimumPwm() {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.remove(kKeyHasCustomAirAssistMinimumPwm);
+  preferences.remove(kKeyAirAssistMinimumPwm);
+}
+
+void persistAirAssistMinimumPwm(uint8_t minimumPwmPercent) {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.putBool(kKeyHasCustomAirAssistMinimumPwm, true);
+  preferences.putUChar(kKeyAirAssistMinimumPwm, minimumPwmPercent);
 }
 
 void loadPersistedTargetTemperature() {
@@ -238,6 +323,48 @@ void loadPersistedTargetTemperature() {
   if (hasStoredTarget) {
     clearPersistedTargetTemperature();
   }
+}
+
+void loadPersistedAirAssistSettings() {
+  runtimeControlConfig = kDefaultControlConfig;
+  hasConfiguredAirAssistEnabled = false;
+  hasConfiguredAirAssistMinimumPwm = false;
+
+  if (!preferencesReady) {
+    syncSettingsTelemetrySnapshot();
+    return;
+  }
+
+  const bool hasStoredAirAssistEnabled =
+      preferences.getBool(kKeyHasCustomAirAssistEnabled, false);
+  if (hasStoredAirAssistEnabled) {
+    runtimeControlConfig.airAssistEnabled =
+        preferences.getBool(kKeyAirAssistEnabled, kDefaultControlConfig.airAssistEnabled);
+    hasConfiguredAirAssistEnabled = true;
+  }
+
+  const bool hasStoredAirAssistMinimumPwm =
+      preferences.getBool(kKeyHasCustomAirAssistMinimumPwm, false);
+  const uint8_t storedAirAssistMinimumPwm =
+      preferences.getUChar(kKeyAirAssistMinimumPwm,
+                           kDefaultControlConfig.airAssistMinimumPwmPercent);
+
+  if (hasStoredAirAssistMinimumPwm &&
+      ControlEngine::isAirAssistMinimumPwmValid(storedAirAssistMinimumPwm,
+                                                runtimeControlConfig)) {
+    runtimeControlConfig.airAssistMinimumPwmPercent = storedAirAssistMinimumPwm;
+    hasConfiguredAirAssistMinimumPwm = true;
+  } else if (hasStoredAirAssistMinimumPwm) {
+    clearPersistedAirAssistMinimumPwm();
+  }
+
+  syncSettingsTelemetrySnapshot();
+}
+
+void printTemperatureLine(const char* label, float value) {
+  Serial.print(label);
+  DisplayFormat::printTemperatureC(Serial, value);
+  Serial.println(" C");
 }
 
 void printTrackedSensorDetails(const SensorSnapshot& sensorSnapshot, uint32_t nowMs) {
@@ -273,7 +400,7 @@ void printTrackedSensorDetails(const SensorSnapshot& sensorSnapshot, uint32_t no
     Serial.print(kSensorManagerConfig.trackedSensors[trackedIndex].sensorLabel);
     Serial.print(" temperature: ");
     if (tracked.sampleValid) {
-      Serial.print(tracked.temperatureC, 2);
+      DisplayFormat::printTemperatureC(Serial, tracked.temperatureC);
       Serial.println(" C");
     } else {
       Serial.println("unavailable");
@@ -331,9 +458,7 @@ void printControlDetails() {
   Serial.print("  Control mode: ");
   Serial.println(ControlEngine::modeLabel(lastControlSnapshot.mode));
 
-  Serial.print("  Target temperature: ");
-  Serial.print(lastControlSnapshot.targetTemperatureC, 2);
-  Serial.println(" C");
+  printTemperatureLine("  Target temperature: ", lastControlSnapshot.targetTemperatureC);
 
   Serial.print("  Target source: ");
   Serial.println(hasConfiguredTargetTemperature ? "persisted/custom" : "default");
@@ -343,7 +468,7 @@ void printControlDetails() {
 
   Serial.print("  Water delta: ");
   if (lastControlSnapshot.waterSensorValid && isfinite(lastControlSnapshot.waterDeltaC)) {
-    Serial.print(lastControlSnapshot.waterDeltaC, 2);
+    DisplayFormat::printTemperatureC(Serial, lastControlSnapshot.waterDeltaC);
     Serial.println(" C");
   } else {
     Serial.println("n/a");
@@ -358,11 +483,14 @@ void printControlDetails() {
   Serial.println("%");
 
   Serial.print("  Air assist enabled: ");
-  Serial.println(kDefaultControlConfig.airAssistEnabled ? "yes" : "no");
+  Serial.println(runtimeControlConfig.airAssistEnabled ? "yes" : "no");
 
-  Serial.print("  Air assist threshold: ");
-  Serial.print(kDefaultControlConfig.airAssistStartTemperatureC, 2);
-  Serial.println(" C");
+  printTemperatureLine("  Air assist threshold: ",
+                       runtimeControlConfig.airAssistStartTemperatureC);
+
+  Serial.print("  Air assist min PWM: ");
+  Serial.print(runtimeControlConfig.airAssistMinimumPwmPercent);
+  Serial.println("%");
 
   Serial.print("  Final target PWM: ");
   Serial.print(lastControlSnapshot.finalPwmPercent);
@@ -392,6 +520,26 @@ void printFaultPolicyDefaults() {
   Serial.print("  Fan settling time: ");
   Serial.print(kDefaultFaultMonitorConfig.settlingTimeMs);
   Serial.println(" ms");
+}
+
+void printRemoteConfigStatus() {
+  Serial.print("  Remote config accepts: ");
+  Serial.println(remoteConfigStatus.acceptedCount);
+
+  Serial.print("  Remote config rejects: ");
+  Serial.println(remoteConfigStatus.rejectedCount);
+
+  Serial.print("  Remote config last result: ");
+  if (!remoteConfigStatus.lastCommandSeen) {
+    Serial.println("none");
+    return;
+  }
+
+  Serial.println(remoteConfigStatus.lastCommandAccepted ? "accepted" : "rejected");
+  Serial.print("  Remote config last key: ");
+  Serial.println(remoteConfigStatus.lastKey);
+  Serial.print("  Remote config last detail: ");
+  Serial.println(remoteConfigStatus.lastDetail);
 }
 
 void confirmRunningOtaImageIfNeeded() {
@@ -484,6 +632,8 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.print("  Fan ok: ");
   Serial.println(policySnapshot.fanOk ? "yes" : "no");
 
+  printRemoteConfigStatus();
+
   Serial.print("  Start boost active: ");
   Serial.println(fanDriver.isStartBoostActive() ? "yes" : "no");
 
@@ -509,6 +659,167 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.println();
 }
 
+void resetTargetTemperatureToDefault() {
+  requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
+  hasConfiguredTargetTemperature = false;
+  clearPersistedTargetTemperature();
+  requestTelemetryPublish();
+}
+
+bool setTargetTemperature(float targetTemperatureC) {
+  if (!ControlEngine::isTargetTemperatureValid(targetTemperatureC, runtimeControlConfig)) {
+    return false;
+  }
+
+  requestedTargetTemperatureC = targetTemperatureC;
+  hasConfiguredTargetTemperature = true;
+  persistTargetTemperature(requestedTargetTemperatureC);
+  requestTelemetryPublish();
+  return true;
+}
+
+bool setAirAssistEnabled(bool enabled) {
+  runtimeControlConfig.airAssistEnabled = enabled;
+  hasConfiguredAirAssistEnabled = true;
+  persistAirAssistEnabled(enabled);
+  syncSettingsTelemetrySnapshot();
+  requestTelemetryPublish();
+  return true;
+}
+
+bool setAirAssistMinimumPwm(uint8_t minimumPwmPercent) {
+  if (!ControlEngine::isAirAssistMinimumPwmValid(minimumPwmPercent,
+                                                 runtimeControlConfig)) {
+    return false;
+  }
+
+  runtimeControlConfig.airAssistMinimumPwmPercent = minimumPwmPercent;
+  hasConfiguredAirAssistMinimumPwm = true;
+  persistAirAssistMinimumPwm(minimumPwmPercent);
+  syncSettingsTelemetrySnapshot();
+  requestTelemetryPublish();
+  return true;
+}
+
+bool copyRemoteConfigPayload(const uint8_t* payload,
+                             size_t length,
+                             char* buffer,
+                             size_t bufferSize) {
+  if (payload == nullptr || buffer == nullptr || length >= bufferSize) {
+    return false;
+  }
+
+  memcpy(buffer, payload, length);
+  buffer[length] = '\0';
+  return true;
+}
+
+bool parseBoolPayload(const char* text, bool* value) {
+  if (text == nullptr || value == nullptr) {
+    return false;
+  }
+
+  if (strcmp(text, "true") == 0 || strcmp(text, "1") == 0 ||
+      strcmp(text, "on") == 0) {
+    *value = true;
+    return true;
+  }
+
+  if (strcmp(text, "false") == 0 || strcmp(text, "0") == 0 ||
+      strcmp(text, "off") == 0) {
+    *value = false;
+    return true;
+  }
+
+  return false;
+}
+
+bool parseUInt8Payload(const char* text, uint8_t* value) {
+  if (text == nullptr || value == nullptr) {
+    return false;
+  }
+
+  char* endPtr = nullptr;
+  const long parsedValue = strtol(text, &endPtr, 10);
+  if (*endPtr != '\0' || parsedValue < 0 || parsedValue > 255) {
+    return false;
+  }
+
+  *value = (uint8_t)parsedValue;
+  return true;
+}
+
+void handleRemoteConfigMessage(const char* suffix,
+                               const uint8_t* payload,
+                               size_t length,
+                               void* context) {
+  (void)context;
+
+  char payloadText[kRemoteConfigPayloadBufferSize] = {};
+  if (!copyRemoteConfigPayload(payload, length, payloadText, sizeof(payloadText))) {
+    setRemoteConfigStatus(false, suffix, "payload too long");
+    Serial.print("Remote config rejected for ");
+    Serial.print(suffix);
+    Serial.println(": payload too long.");
+    return;
+  }
+
+  if (strcmp(suffix, kSetTargetTemperatureSuffix) == 0) {
+    char* endPtr = nullptr;
+    const float parsedTargetTemperatureC = strtof(payloadText, &endPtr);
+    if (*endPtr != '\0' || !setTargetTemperature(parsedTargetTemperatureC)) {
+      setRemoteConfigStatus(false,
+                            "target_temp_c",
+                            "target out of allowed range");
+      Serial.print("Remote target rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "target_temp_c", "persisted");
+    Serial.print("Remote target applied: ");
+    DisplayFormat::printTemperatureC(Serial, requestedTargetTemperatureC);
+    Serial.println(" C");
+    return;
+  }
+
+  if (strcmp(suffix, kSetAirAssistEnableSuffix) == 0) {
+    bool enabled = false;
+    if (!parseBoolPayload(payloadText, &enabled)) {
+      setRemoteConfigStatus(false,
+                            "air_assist_enable",
+                            "expected true/false or 1/0");
+      Serial.print("Remote air-assist enable rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setAirAssistEnabled(enabled);
+    setRemoteConfigStatus(true, "air_assist_enable", enabled ? "enabled" : "disabled");
+    Serial.print("Remote air assist set to ");
+    Serial.println(enabled ? "enabled." : "disabled.");
+    return;
+  }
+
+  if (strcmp(suffix, kSetAirAssistMinimumPwmSuffix) == 0) {
+    uint8_t minimumPwmPercent = 0;
+    if (!parseUInt8Payload(payloadText, &minimumPwmPercent) ||
+        !setAirAssistMinimumPwm(minimumPwmPercent)) {
+      setRemoteConfigStatus(false,
+                            "air_min_pwm_percent",
+                            "minimum PWM exceeds configured maximum");
+      Serial.print("Remote air-assist minimum PWM rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "air_min_pwm_percent", "persisted");
+    Serial.print("Remote air-assist minimum PWM set to ");
+    Serial.print(runtimeControlConfig.airAssistMinimumPwmPercent);
+    Serial.println("%.");
+  }
+}
+
 void handleSerialCommand(const char* command) {
   if (command[0] == '\0') {
     return;
@@ -527,17 +838,15 @@ void handleSerialCommand(const char* command) {
 
   if (strcmp(command, "airassist") == 0) {
     Serial.print("Air assist enabled: ");
-    Serial.println(kDefaultControlConfig.airAssistEnabled ? "yes" : "no");
-    Serial.print("Air assist start temperature: ");
-    Serial.print(kDefaultControlConfig.airAssistStartTemperatureC, 2);
-    Serial.println(" C");
-    Serial.print("Air assist full temperature: ");
-    Serial.print(kDefaultControlConfig.airAssistFullTemperatureC, 2);
-    Serial.println(" C");
+    Serial.println(runtimeControlConfig.airAssistEnabled ? "yes" : "no");
+    printTemperatureLine("Air assist start temperature: ",
+                         runtimeControlConfig.airAssistStartTemperatureC);
+    printTemperatureLine("Air assist full temperature: ",
+                         runtimeControlConfig.airAssistFullTemperatureC);
     Serial.print("Air assist PWM range: ");
-    Serial.print(kDefaultControlConfig.airAssistMinimumPwmPercent);
+    Serial.print(runtimeControlConfig.airAssistMinimumPwmPercent);
     Serial.print("% .. ");
-    Serial.print(kDefaultControlConfig.airAssistMaximumPwmPercent);
+    Serial.print(runtimeControlConfig.airAssistMaximumPwmPercent);
     Serial.println("%");
     return;
   }
@@ -571,24 +880,24 @@ void handleSerialCommand(const char* command) {
     if (!lastFaultSnapshotValid) {
       Serial.println("Telemetry not ready yet. Wait for the first diagnostics cycle.");
       return;
-    }
+      }
 
-    const bool published = mqttTelemetry.publishTelemetry(millis(),
-                                                          lastControlSnapshot,
-                                                          lastFaultSnapshot,
-                                                          lastFaultPolicySnapshot,
-                                                          true);
-    Serial.println(published ? "Telemetry published." :
-                              "Telemetry not published. Check network status.");
+      const bool published = mqttTelemetry.publishTelemetry(millis(),
+                                                            lastControlSnapshot,
+                                                            settingsTelemetrySnapshot,
+                                                            lastFaultSnapshot,
+                                                            lastFaultPolicySnapshot,
+                                                            remoteConfigStatus,
+                                                            true);
+      Serial.println(published ? "Telemetry published." :
+                                "Telemetry not published. Check network status.");
     return;
   }
 
   if (strcmp(command, "default") == 0) {
-    requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
-    hasConfiguredTargetTemperature = false;
-    clearPersistedTargetTemperature();
+    resetTargetTemperatureToDefault();
     Serial.print("Target temperature reset to default ");
-    Serial.print(requestedTargetTemperatureC, 2);
+    DisplayFormat::printTemperatureC(Serial, requestedTargetTemperatureC);
     Serial.println(" C.");
     return;
   }
@@ -596,22 +905,16 @@ void handleSerialCommand(const char* command) {
   if (strncmp(command, "target ", 7) == 0) {
     char* endPtr = nullptr;
     const float parsedTargetTemperatureC = strtof(command + 7, &endPtr);
-    if (*endPtr != '\0' ||
-        !ControlEngine::isTargetTemperatureValid(parsedTargetTemperatureC)) {
-      requestedTargetTemperatureC = kDefaultControlConfig.defaultTargetTemperatureC;
-      hasConfiguredTargetTemperature = false;
-      clearPersistedTargetTemperature();
+    if (*endPtr != '\0' || !setTargetTemperature(parsedTargetTemperatureC)) {
+      resetTargetTemperatureToDefault();
       Serial.print("Invalid target temperature. Falling back to default ");
-      Serial.print(requestedTargetTemperatureC, 2);
+      DisplayFormat::printTemperatureC(Serial, requestedTargetTemperatureC);
       Serial.println(" C.");
       return;
     }
 
-    requestedTargetTemperatureC = parsedTargetTemperatureC;
-    hasConfiguredTargetTemperature = true;
-    persistTargetTemperature(requestedTargetTemperatureC);
     Serial.print("Target temperature set to ");
-    Serial.print(requestedTargetTemperatureC, 2);
+    DisplayFormat::printTemperatureC(Serial, requestedTargetTemperatureC);
     Serial.println(" C and persisted.");
     return;
   }
@@ -678,11 +981,13 @@ void setup() {
 
   const bool preferencesOk = beginPreferences();
   loadPersistedTargetTemperature();
+  loadPersistedAirAssistSettings();
   const bool fanReady = fanDriver.begin();
   const bool rpmReady = rpmMonitor.begin();
   const bool sensorBusReady = sensorManager.begin(millis());
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
-  lastControlSnapshot = ControlEngine::compute(buildControlInputs(sensorSnapshot));
+  lastControlSnapshot =
+      ControlEngine::compute(buildControlInputs(sensorSnapshot), runtimeControlConfig);
   confirmRunningOtaImageIfNeeded();
 
   Serial.println();
@@ -700,28 +1005,28 @@ void setup() {
   Serial.println(kSensorManagerConfig.oneWirePin);
   printConfiguredRom("Configured water sensor ROM: ", kWaterSensorRomCode);
   printConfiguredRom("Configured air sensor ROM: ", kAirSensorRomCode);
-  Serial.print("Default target temperature: ");
-  Serial.print(kDefaultControlConfig.defaultTargetTemperatureC, 2);
-  Serial.println(" C");
+  printTemperatureLine("Default target temperature: ",
+                       kDefaultControlConfig.defaultTargetTemperatureC);
   Serial.print("Loaded target source: ");
   Serial.println(hasConfiguredTargetTemperature ? "persisted/custom" : "default");
-  Serial.print("Fallback target temperature: ");
-  Serial.print(kDefaultControlConfig.defaultTargetTemperatureC, 2);
-  Serial.println(" C");
+  printTemperatureLine("Fallback target temperature: ",
+                       kDefaultControlConfig.defaultTargetTemperatureC);
   Serial.print("Water sensor fault fallback PWM: ");
   Serial.print(kDefaultControlConfig.fallbackPwmPercent);
   Serial.println("%");
-  Serial.print("Air assist start temperature: ");
-  Serial.print(kDefaultControlConfig.airAssistStartTemperatureC, 2);
-  Serial.println(" C");
+  printTemperatureLine("Air assist start temperature: ",
+                       runtimeControlConfig.airAssistStartTemperatureC);
+  Serial.print("Air assist enabled: ");
+  Serial.println(runtimeControlConfig.airAssistEnabled ? "yes" : "no");
   Serial.print("Air assist PWM range: ");
-  Serial.print(kDefaultControlConfig.airAssistMinimumPwmPercent);
+  Serial.print(runtimeControlConfig.airAssistMinimumPwmPercent);
   Serial.print("% .. ");
-  Serial.print(kDefaultControlConfig.airAssistMaximumPwmPercent);
+  Serial.print(runtimeControlConfig.airAssistMaximumPwmPercent);
   Serial.println("%");
   printTrackedSensorDetails(sensorSnapshot, millis());
   printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
+  mqttTelemetry.setRemoteConfigCallback(handleRemoteConfigMessage, nullptr);
   mqttTelemetry.begin(millis());
   otaUploadServer.begin(
       kFirmwareName, kFirmwareVersion, kFirmwareIdentityTag, kFirmwareVersionTag);
@@ -744,13 +1049,27 @@ void loop() {
 
   sensorManager.update(nowMs);
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
-  lastControlSnapshot = ControlEngine::compute(buildControlInputs(sensorSnapshot));
+  lastControlSnapshot =
+      ControlEngine::compute(buildControlInputs(sensorSnapshot), runtimeControlConfig);
 
   fanDriver.setCommandedPwmPercent(lastControlSnapshot.finalPwmPercent, nowMs);
   fanDriver.update(nowMs);
   rpmMonitor.update(nowMs);
   mqttTelemetry.update(nowMs);
   otaUploadServer.update(nowMs);
+
+  if (telemetryPublishRequested && lastFaultSnapshotValid) {
+    const bool published = mqttTelemetry.publishTelemetry(nowMs,
+                                                          lastControlSnapshot,
+                                                          settingsTelemetrySnapshot,
+                                                          lastFaultSnapshot,
+                                                          lastFaultPolicySnapshot,
+                                                          remoteConfigStatus,
+                                                          true);
+    if (published) {
+      telemetryPublishRequested = false;
+    }
+  }
 
   if (nowMs - lastDiagnosticsMs < kDiagnosticsIntervalMs) {
     return;
@@ -769,7 +1088,9 @@ void loop() {
                    nowMs);
   mqttTelemetry.publishTelemetry(nowMs,
                                  lastControlSnapshot,
+                                 settingsTelemetrySnapshot,
                                  lastFaultSnapshot,
                                  lastFaultPolicySnapshot,
+                                 remoteConfigStatus,
                                  false);
 }
