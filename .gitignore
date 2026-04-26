@@ -22,6 +22,7 @@ sqlite3.db
 *.log
 *.tmp
 .codex-*/
+Aquarium Test export.csv
 
 # Local secrets
 firmware/controller/network_config.local.h
