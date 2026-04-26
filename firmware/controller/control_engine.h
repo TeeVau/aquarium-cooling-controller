@@ -122,6 +122,17 @@ bool isTargetTemperatureValid(float targetTemperatureC,
                               const ControlConfig& config = kDefaultControlConfig);
 
 /**
+ * @brief Checks whether a minimum air-assist PWM is inside the configured limits.
+ *
+ * @param minimumPwmPercent Candidate minimum air-assist PWM percentage.
+ * @param config Control limits used for validation.
+ * @return True when the minimum PWM can be applied safely.
+ */
+bool isAirAssistMinimumPwmValid(
+    uint8_t minimumPwmPercent,
+    const ControlConfig& config = kDefaultControlConfig);
+
+/**
  * @brief Replaces invalid target temperatures with the configured default.
  *
  * @param targetTemperatureC Candidate target temperature in degrees Celsius.

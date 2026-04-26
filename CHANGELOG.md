@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added explicit firmware identity and firmware-version tags inside the OTA
   image so OTA validation does not depend on Arduino `PROJECT_NAME` or ESP32
   build metadata.
+- Added validated MQTT remote configuration for `target_temp_c`,
+  `air_assist_enable`, and `air_min_pwm_percent`, including persistence and
+  MQTT/diagnostic feedback for accepted and rejected commands.
 
 ### Changed
 
@@ -31,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Verified the BIN-only OTA workflow on a bare ESP32 bench target, including
   manual enable, live HTTP upload, validation failure paths, and a successful
   OTA upgrade with reboot into the new firmware.
+- Rounded displayed and published temperature values to one decimal place at
+  output boundaries while keeping internal control values at full floating-point
+  precision.
+- Updated the FHEM integration and project documentation for the new MQTT
+  remote configuration surface and the one-decimal display convention.
 
 ## [0.1.0] - 2026-04-20
 

@@ -44,7 +44,7 @@ The repository currently contains both:
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
 Latest released firmware: `0.1.0` (`2026-04-20`).
-Current OTA development version on this branch: `0.1.2` (`Unreleased`).
+Current source version on this branch: `0.1.2` (`Unreleased`).
 
 Implemented and bench-verified:
 
@@ -68,13 +68,15 @@ Implemented and broker-verified:
 - local secret override via ignored `network_config.local.h`
 - broker-side normal telemetry capture
 - broker-side fault telemetry for air sensor, water sensor, and fan-fault cases
+- validated MQTT remote configuration for target temperature, air-assist enable,
+  and minimum air-assist PWM
 - manually enabled BIN-only OTA upload with live bench validation on a bare ESP32
 
 Still intentionally open:
 
 - real-aquarium tuning of water and air control behavior
 - longer real-aquarium live data capture after the first 2 h installed run
-- MQTT remote configuration
+- live broker/FHEM verification of the new MQTT remote configuration path
 
 ## Features
 
@@ -92,6 +94,7 @@ Implemented now:
 - Central fault-policy model with alarm severity and response labels
 - Hardware-verified fault responses for sensor failures and fan plausibility faults
 - Wi-Fi/MQTT telemetry that does not block local cooling
+- Validated MQTT remote configuration for selected persisted settings
 - Manually enabled BIN-only OTA firmware upload over Wi-Fi
 - Serial service commands for diagnostics and bench operation
 
@@ -335,9 +338,11 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 
 | Topic suffix | Payload |
 |---|---|
-| `/state/water_temp_c` | water temperature or `unavailable` |
-| `/state/air_temp_c` | air temperature or `unavailable` |
-| `/state/target_temp_c` | active target temperature |
+| `/state/water_temp_c` | water temperature or `unavailable`, formatted with one decimal place |
+| `/state/air_temp_c` | air temperature or `unavailable`, formatted with one decimal place |
+| `/state/target_temp_c` | active target temperature, formatted with one decimal place |
+| `/state/air_assist_enable` | active air-assist enable flag |
+| `/state/air_min_pwm_percent` | active minimum air-assist PWM |
 | `/state/fan_pwm_percent` | final commanded fan PWM |
 | `/state/fan_rpm` | measured fan RPM |
 | `/state/controller_mode` | local control mode |
@@ -345,6 +350,8 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/diagnostic/rpm_tolerance` | current RPM tolerance |
 | `/diagnostic/rpm_error` | measured minus expected RPM |
 | `/diagnostic/plausibility_active` | whether RPM plausibility is currently active |
+| `/diagnostic/remote_config_accept_count` | count of accepted remote config commands |
+| `/diagnostic/remote_config_reject_count` | count of rejected remote config commands |
 | `/status/fan_plausible` | current plausibility result |
 | `/status/fan_fault` | latched fan fault |
 | `/status/water_sensor_ok` | water sensor health |
@@ -354,7 +361,21 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/status/fault_response` | local fault response |
 | `/status/cooling_degraded` | whether cooling effectiveness is degraded |
 | `/status/service_required` | whether service/operator action is required |
+| `/status/remote_config_last_result` | `accepted`, `rejected`, or `none` |
+| `/status/remote_config_last_key` | key name of the last remote config command |
+| `/status/remote_config_last_detail` | short apply/reject detail for the last remote config command |
 | `/status/availability` | MQTT last-will availability |
+
+The firmware now also subscribes to these validated remote `/set/...` topics:
+
+| Topic suffix | Payload |
+|---|---|
+| `/set/target_temp_c` | target temperature in Celsius |
+| `/set/air_assist_enable` | `true`/`false` or `1`/`0` |
+| `/set/air_min_pwm_percent` | integer minimum PWM percent in the safe `0..45` range |
+
+Temperature rounding happens only at output boundaries. Internal sensor samples,
+control inputs, and PWM calculations keep full floating-point precision.
 
 ### 4. FHEM MQTT2 Integration
 
@@ -365,10 +386,11 @@ the current telemetry topics:
 integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 ```
 
-The FHEM definition is intended for monitoring. It creates readings for the
-published state, diagnostics, fault-policy values, and MQTT availability. The
-current firmware does not yet subscribe to remote `/set/...` topics, so the
-future FHEM `setList` is kept commented in the configuration file.
+The FHEM definition creates readings for the published state, diagnostics,
+fault-policy values, MQTT availability, and remote-config feedback topics. It
+also exposes a `setList` for the validated target temperature, air-assist
+enable flag, and minimum air-assist PWM. Local cooling on the ESP32 remains
+authoritative.
 
 The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.
 If your firmware uses the committed default root `aquarium/cooling`, replace
@@ -404,8 +426,8 @@ Verified controller milestone on hardware:
 - fan fault recovery returns to `none` after the configured plausible-match debounce
 - Wi-Fi connects and reports an assigned IP through the `network` command
 - MQTT connects to the broker and publishes with the configured root topic
-- normal broker capture observed all 20 expected state, diagnostic, and status topics
-- broker telemetry reports plausible normal values such as `water-control`, target `23.00`, fan RPM, expected RPM, tolerance, and RPM error
+- normal broker capture observed the expected telemetry topics for state, diagnostics, and status
+- broker telemetry reports plausible normal values such as `water-control`, target `23.0`, fan RPM, expected RPM, tolerance, and RPM error
 - air-sensor fault publishes `air-sensor-fault`, `warning`, and `disable-air-assist`
 - water-sensor fault publishes `water-sensor-fault`, `critical`, `water-fallback`, `cooling_degraded=true`, and fallback fan PWM
 - fan RPM deviation publishes `fan-fault`, `critical`, `report-fan-fault`, `cooling_degraded=true`, and `service_required=true`
@@ -456,7 +478,7 @@ Useful artifacts:
 - Verify that the FHEM `IODev` points to the correct `MQTT2_CLIENT` or `MQTT2_SERVER`.
 - Compare the root topic reported by the serial `network` command with the root topic in [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg).
 - Confirm the broker receives `<root>/status/availability` as `online`.
-- Remember that FHEM set commands are intentionally inactive until MQTT remote configuration is implemented in firmware.
+- Check `remote_config_last_result`, `remote_config_last_key`, and `remote_config_last_detail` after trying a FHEM set command.
 
 ### Upload fails
 
@@ -469,7 +491,7 @@ Useful artifacts:
 Next likely steps:
 
 1. Extend the first installed aquarium capture to longer live data for water and air control tuning.
-2. Add MQTT remote parameter updates with validation and persistence.
+2. Verify the new MQTT remote parameter workflow on the fully wired controller and in the real FHEM setup.
 3. Extend OTA validation from the bare ESP32 bench target to the fully wired controller.
 4. Finalize enclosure, wiring, and installation layout for the real aquarium.
 5. Re-check fan plausibility in the final installed airflow path.

@@ -298,9 +298,10 @@ Scope:
 Current implementation note: Wi-Fi/MQTT publish telemetry and network
 diagnostics are implemented and verified against the local MQTT broker.
 Manual BIN-only OTA upload is also implemented and bench-verified on a bare
-ESP32 target. MQTT remote configuration remains planned follow-up work. A FHEM
-`MQTT2_DEVICE` integration is provided as a monitoring-only consumer for the
-verified telemetry topics.
+ESP32 target. MQTT remote configuration for target temperature, air-assist
+enable, and minimum air-assist PWM is implemented in firmware with validation,
+persistence, and feedback topics. The checked-in FHEM `MQTT2_DEVICE`
+integration now covers both monitoring and the validated remote set surface.
 
 Deliverables:
 
@@ -398,12 +399,12 @@ Dependencies:
 
 - FR-4.1 [Must]: The production controller shall publish water temperature, air
   temperature, fan PWM, fan RPM, target temperature, controller mode, and fault
-  status over MQTT. This is implemented and broker-verified as a publish-only
-  telemetry foundation.
+  status over MQTT. This is implemented and broker-verified for the documented
+  telemetry surface.
 - FR-4.2 [Must]: The production controller shall accept validated remote
   updates for target temperature and selected non-critical control flags over
-  MQTT. This remains planned after the verified publish-only telemetry
-  foundation.
+  MQTT, reject invalid payloads without overwriting valid persisted settings,
+  and report the result through diagnostics or MQTT status topics.
 - FR-4.3 [Should]: The production controller should support a manual override
   mode for service or testing with explicit validation and clear state
   reporting.
@@ -421,9 +422,9 @@ Dependencies:
 - FR-4.8 [Should]: The production controller should publish OTA state and last
   update result through diagnostics or MQTT status topics.
 - FR-4.9 [Should]: The repository should provide a local home-automation
-  monitoring definition for the current MQTT telemetry surface. The current
-  FHEM `MQTT2_DEVICE` definition is monitoring-only until remote set topics are
-  implemented in firmware.
+  integration definition for the current MQTT telemetry surface and validated
+  remote settings. The current FHEM `MQTT2_DEVICE` definition covers the
+  documented readings plus the supported remote set commands.
 
 ### 4.2 Non-Functional Requirements (NFR)
 
@@ -544,16 +545,20 @@ configuration file.
 
 | Topic | Direction | Purpose |
 |---|---|---|
-| `aquarium/cooling/state/water_temp_c` | publish | Water temperature |
-| `aquarium/cooling/state/air_temp_c` | publish | Air temperature |
+| `aquarium/cooling/state/water_temp_c` | publish | Water temperature, rounded to one decimal place at the output boundary |
+| `aquarium/cooling/state/air_temp_c` | publish | Air temperature, rounded to one decimal place at the output boundary |
 | `aquarium/cooling/state/fan_pwm_percent` | publish | Commanded fan PWM |
 | `aquarium/cooling/state/fan_rpm` | publish | Measured fan RPM |
-| `aquarium/cooling/state/target_temp_c` | publish | Active target temperature |
+| `aquarium/cooling/state/target_temp_c` | publish | Active target temperature, rounded to one decimal place at the output boundary |
+| `aquarium/cooling/state/air_assist_enable` | publish | Active air-assist enable flag |
+| `aquarium/cooling/state/air_min_pwm_percent` | publish | Active minimum air-assist PWM |
 | `aquarium/cooling/state/controller_mode` | publish | Controller mode |
 | `aquarium/cooling/diagnostic/expected_rpm` | publish | Interpolated expected RPM |
 | `aquarium/cooling/diagnostic/rpm_tolerance` | publish | Current RPM tolerance |
 | `aquarium/cooling/diagnostic/rpm_error` | publish | Measured minus expected RPM |
 | `aquarium/cooling/diagnostic/plausibility_active` | publish | Whether fan plausibility is currently evaluated |
+| `aquarium/cooling/diagnostic/remote_config_accept_count` | publish | Accepted remote-config command count |
+| `aquarium/cooling/diagnostic/remote_config_reject_count` | publish | Rejected remote-config command count |
 | `aquarium/cooling/status/fan_plausible` | publish | Plausibility state |
 | `aquarium/cooling/status/fan_fault` | publish | Latched fan fault |
 | `aquarium/cooling/status/water_sensor_ok` | publish | Water sensor health |
@@ -563,6 +568,9 @@ configuration file.
 | `aquarium/cooling/status/alarm_code` | publish | Fault summary |
 | `aquarium/cooling/status/fault_severity` | publish | Fault severity |
 | `aquarium/cooling/status/fault_response` | publish | Local fault response |
+| `aquarium/cooling/status/remote_config_last_result` | publish | Last remote-config apply result |
+| `aquarium/cooling/status/remote_config_last_key` | publish | Key name of the last remote-config command |
+| `aquarium/cooling/status/remote_config_last_detail` | publish | Last remote-config apply/reject detail |
 | `aquarium/cooling/status/availability` | publish | MQTT online/offline availability |
 | `aquarium/cooling/set/target_temp_c` | subscribe | Remote target temperature |
 | `aquarium/cooling/set/air_assist_enable` | subscribe | Air-assist enable flag |
@@ -576,14 +584,11 @@ The repository includes a FHEM `MQTT2_DEVICE` definition at:
 integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 ```
 
-It maps all currently published telemetry topics to explicit FHEM readings.
-The file uses the verified bench root topic `aquarium_cooling`; deployments
-using the committed default root `aquarium/cooling` must adjust the root topic
-before importing it into FHEM.
-
-The FHEM integration must remain monitoring-only for the current firmware
-revision. The planned FHEM `setList` is documented but commented out because
-the firmware does not yet subscribe to or validate remote `/set/...` topics.
+It maps all currently published telemetry topics to explicit FHEM readings and
+exposes the validated `setList` for target temperature, air-assist enable, and
+minimum air-assist PWM. The file uses the verified bench root topic
+`aquarium_cooling`; deployments using the committed default root
+`aquarium/cooling` must adjust the root topic before importing it into FHEM.
 
 #### OTA Update Interface
 
@@ -621,8 +626,10 @@ the firmware does not yet subscribe to or validate remote `/set/...` topics.
 |---|---|---|
 | `target_c` | float | Desired water temperature |
 | `target_set` | bool | Marks whether a custom target temperature is stored |
-| `air_assist_enabled` | bool | Planned later: enable under-lid air-assist logic |
-| `air_assist_min_pwm_percent` | uint8_t | Planned later: minimum PWM when air-assist is active |
+| `air_en` | bool | Stored air-assist enable flag |
+| `air_en_set` | bool | Marks whether a custom air-assist enable flag is stored |
+| `air_min_pwm` | uint8_t | Stored minimum PWM when air-assist is active |
+| `air_min_set` | bool | Marks whether a custom minimum air-assist PWM is stored |
 | `control_mode` | enum | `auto`, optional `manual_override`, `fault_mode` |
 
 #### Diagnostics Payload
@@ -793,9 +800,9 @@ runtime command input.
 |---|---|---|---|
 | AT-01 | Autonomous cooling without network | Run production firmware with Wi-Fi and MQTT unavailable | Cooling control remains active locally |
 | AT-02 | Persisted configuration resilience | Store target temperature, reboot, then boot without network | Target remains active and cooling still works |
-| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state and status topics are published, including normal operation and fault-policy state |
-| AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected |
-| AT-05 | FHEM MQTT2 monitoring | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings without issuing control commands |
+| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state, diagnostic, and status topics are published, including one-decimal temperature values and remote-config status feedback |
+| AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected without overwriting the last valid persisted settings |
+| AT-05 | FHEM MQTT2 integration | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings and can issue only the documented validated set commands |
 | AT-06 | Installed fan plausibility | Run controller in actual aquarium installation | Fan plausibility behaves correctly in the real airflow path |
 | AT-07 | OTA success path | Enable the OTA maintenance window and upload a newer valid `.bin` firmware image from the local network | Firmware uploads, validates, activates, and reports success |
 | AT-08 | OTA failure rollback | Interrupt upload or upload an invalid `.bin` image during update test | Device preserves current working firmware and reports failure |

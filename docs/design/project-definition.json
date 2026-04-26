@@ -7,7 +7,7 @@
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, broker-verified publish-only MQTT telemetry, bench-verified BIN-only OTA upload, and documented FHEM MQTT2 monitoring integration"
+    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, broker-verified MQTT telemetry, validated MQTT remote configuration for selected settings, bench-verified BIN-only OTA upload, and documented FHEM MQTT2 integration"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -27,8 +27,8 @@
     "constraints": [
       "System only cools, no heating",
       "No local display or buttons are planned",
-      "MQTT may change target temperature",
-      "Target temperature must persist across reboot and across Wi-Fi/MQTT outages",
+      "MQTT may change target temperature and selected non-critical air-assist settings",
+      "Persisted remote settings must survive reboot and across Wi-Fi/MQTT outages",
       "Critical control must never depend on MQTT or Wi-Fi availability",
       "Low audible noise is more important than maximum cooling performance"
     ]
@@ -137,8 +137,10 @@
       "must_persist": [
         "target_c",
         "target_set",
-        "future: air_assist_enabled",
-        "future: air_assist_min_pwm_percent",
+        "air_en",
+        "air_en_set",
+        "air_min_pwm",
+        "air_min_set",
         "future: optional additional controller parameters"
       ],
       "boot_behavior": [
@@ -274,7 +276,7 @@
     }
   },
   "mqtt": {
-    "design_status": "Publish-only MQTT telemetry foundation is implemented and broker-verified; manual BIN-only OTA upload is implemented and bench-verified; remote configuration remains planned",
+    "design_status": "MQTT telemetry is implemented and broker-verified; validated remote configuration for selected settings is implemented in firmware; manual BIN-only OTA upload is implemented and bench-verified",
     "functional_requirements": {
       "publish": [
         "water temperature",
@@ -299,6 +301,8 @@
         "aquarium/cooling/state/fan_pwm_percent",
         "aquarium/cooling/state/fan_rpm",
         "aquarium/cooling/state/target_temp_c",
+        "aquarium/cooling/state/air_assist_enable",
+        "aquarium/cooling/state/air_min_pwm_percent",
         "aquarium/cooling/state/controller_mode"
       ],
       "status": [
@@ -311,13 +315,18 @@
         "aquarium/cooling/status/alarm_code",
         "aquarium/cooling/status/fault_severity",
         "aquarium/cooling/status/fault_response",
+        "aquarium/cooling/status/remote_config_last_result",
+        "aquarium/cooling/status/remote_config_last_key",
+        "aquarium/cooling/status/remote_config_last_detail",
         "aquarium/cooling/status/availability"
       ],
       "diagnostic": [
         "aquarium/cooling/diagnostic/expected_rpm",
         "aquarium/cooling/diagnostic/rpm_tolerance",
         "aquarium/cooling/diagnostic/rpm_error",
-        "aquarium/cooling/diagnostic/plausibility_active"
+        "aquarium/cooling/diagnostic/plausibility_active",
+        "aquarium/cooling/diagnostic/remote_config_accept_count",
+        "aquarium/cooling/diagnostic/remote_config_reject_count"
       ],
       "set": [
         "aquarium/cooling/set/target_temp_c",
@@ -337,7 +346,7 @@
         "fault recovery telemetry"
       ],
       "notes": [
-        "MQTT is publish-only in the current firmware",
+        "Temperatures are rounded to one decimal place only at the MQTT output boundary",
         "Local cooling and fault handling remain authoritative on the ESP32",
         "Broker credentials and local network configuration are intentionally not committed"
       ]
@@ -346,7 +355,7 @@
   },
   "home_automation_integrations": {
     "fhem": {
-      "status": "Documented monitoring integration for current publish-only MQTT telemetry",
+      "status": "Documented FHEM integration for MQTT telemetry and validated remote settings",
       "definition_file": "integrations/fhem/aquarium-cooling-mqtt2-device.cfg",
       "documentation_file": "integrations/fhem/README.md",
       "device_type": "MQTT2_DEVICE",
@@ -354,11 +363,11 @@
         "Display water and air temperature",
         "Display target temperature, fan PWM, and fan RPM",
         "Display RPM plausibility diagnostics",
-        "Display fault policy state and MQTT availability"
+        "Display fault policy state and MQTT availability",
+        "Expose target temperature, air-assist enable, and minimum air-assist PWM as validated set commands"
       ],
       "limitations": [
-        "The current firmware is publish-only",
-        "FHEM setList entries remain commented until firmware subscribes to remote set topics",
+        "Only selected non-critical settings are writable over MQTT",
         "The FHEM topic root must match AQ_MQTT_ROOT_TOPIC"
       ],
       "verified_root_topic": "aquarium_cooling",
@@ -389,10 +398,10 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "BIN-only OTA upload is implemented and bench-verified on a bare ESP32 target alongside the broker-verified publish-only MQTT telemetry foundation",
+    "current_task": "BIN-only OTA upload is implemented and bench-verified on a bare ESP32 target alongside broker-verified MQTT telemetry and newly implemented validated remote configuration",
     "next_expected_tasks": [
         "Tune water and air control behavior with live aquarium data",
-        "Add MQTT remote configuration",
+        "Verify MQTT remote configuration on the fully wired controller and in FHEM",
         "Validate OTA on the fully wired controller hardware",
         "Finalize enclosure and wiring for the installed system"
     ],
@@ -418,7 +427,7 @@
       "Target temperature survives reboot",
       "Fan plausibility fault is detected using curve + tolerance",
       "MQTT can observe current state without compromising autonomy",
-      "MQTT can later set non-critical parameters only after validation and persistence are implemented"
+        "MQTT can set selected non-critical parameters only through validated and persisted update paths"
     ]
   },
   "known_open_points": [

@@ -1,24 +1,26 @@
 # FHEM MQTT2 Integration
 
-This directory contains the FHEM definition for observing the aquarium cooling
-controller through MQTT.
+This directory contains the FHEM definition for observing and sending selected
+non-critical settings to the aquarium cooling controller through MQTT.
 
 ## Current Scope
 
-The firmware state documented on 2026-04-16 is publish-only MQTT telemetry.
-FHEM can therefore display the controller state, diagnostics, availability, and
-fault-policy readings, but it should not be treated as the active control plane.
-Local cooling on the ESP32 remains authoritative.
+The current firmware publishes controller state, diagnostics, availability, and
+fault-policy readings, and it subscribes to a small validated `/set/...`
+surface for:
 
-Remote `/set/...` topics are planned in the project specification, but the
-current firmware does not subscribe to them yet. The corresponding FHEM
-`setList` is included in the configuration file as a commented future block.
+- target temperature
+- air-assist enable/disable
+- minimum air-assist PWM
+
+Local cooling on the ESP32 remains authoritative. FHEM is allowed to adjust
+only these non-critical persisted settings.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `aquarium-cooling-mqtt2-device.cfg` | Pasteable FHEM `MQTT2_DEVICE` definition for all currently published telemetry topics |
+| `aquarium-cooling-mqtt2-device.cfg` | Pasteable FHEM `MQTT2_DEVICE` definition for telemetry plus the validated `setList` |
 
 ## Prerequisites
 
@@ -46,6 +48,8 @@ Expected readings include:
 - `water_temp_c`
 - `air_temp_c`
 - `target_temp_c`
+- `air_assist_enable`
+- `air_min_pwm_percent`
 - `fan_pwm_percent`
 - `fan_rpm`
 - `controller_mode`
@@ -62,7 +66,16 @@ Expected readings include:
 - `alarm_code`
 - `fault_severity`
 - `fault_response`
+- `remote_config_last_result`
+- `remote_config_last_key`
+- `remote_config_last_detail`
+- `remote_config_accept_count`
+- `remote_config_reject_count`
 - `availability`
+
+Displayed temperature readings now arrive from the firmware already rounded to
+one decimal place. This is only an output-formatting change; the controller
+keeps full floating-point precision internally.
 
 ## Troubleshooting
 
