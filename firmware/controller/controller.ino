@@ -50,6 +50,7 @@
 #include <Arduino.h>
 
 #include <esp_arduino_version.h>
+#include <esp_ota_ops.h>
 #include <Preferences.h>
 
 #include "control_engine.h"
@@ -58,13 +59,18 @@
 #include "fault_monitor.h"
 #include "fault_policy.h"
 #include "mqtt_telemetry.h"
+#include "ota_upload_server.h"
 #include "rpm_monitor.h"
 #include "sensor_manager.h"
 
 namespace {
 
+#define AQ_FIRMWARE_VERSION "0.1.2"
+
 constexpr char kFirmwareName[] = "aq-cooling-controller";
-constexpr char kFirmwareVersion[] = "0.1.0";
+constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
+constexpr char kFirmwareIdentityTag[] = "AQFW_PRODUCT=aq-cooling-controller";
+constexpr char kFirmwareVersionTag[] = "AQFW_VERSION=" AQ_FIRMWARE_VERSION;
 constexpr uint32_t kDiagnosticsIntervalMs = 2000;
 constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
@@ -106,6 +112,7 @@ RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
 SensorManager sensorManager(kSensorManagerConfig);
 MqttTelemetry mqttTelemetry;
+OtaUploadServer otaUploadServer;
 Preferences preferences;
 ControlSnapshot lastControlSnapshot = {};
 FaultMonitorSnapshot lastFaultSnapshot = {};
@@ -127,6 +134,9 @@ void printHelp() {
   Serial.println("  faults        -> print current fault-policy defaults");
   Serial.println("  network       -> print Wi-Fi/MQTT telemetry status");
   Serial.println("  publish       -> publish telemetry immediately when MQTT is connected");
+  Serial.println("  ota status    -> print OTA upload status");
+  Serial.println("  ota enable    -> open temporary OTA .bin upload window");
+  Serial.println("  ota cancel    -> close OTA upload window");
   Serial.println("  help          -> show this help");
   Serial.println();
 }
@@ -384,6 +394,33 @@ void printFaultPolicyDefaults() {
   Serial.println(" ms");
 }
 
+void confirmRunningOtaImageIfNeeded() {
+  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
+  if (runningPartition == nullptr) {
+    Serial.println("OTA validation status: running partition unavailable.");
+    return;
+  }
+
+  esp_ota_img_states_t otaState = ESP_OTA_IMG_UNDEFINED;
+  if (esp_ota_get_state_partition(runningPartition, &otaState) != ESP_OK) {
+    Serial.println("OTA validation status: state check unavailable.");
+    return;
+  }
+
+  if (otaState != ESP_OTA_IMG_PENDING_VERIFY) {
+    return;
+  }
+
+  const esp_err_t markResult = esp_ota_mark_app_valid_cancel_rollback();
+  if (markResult == ESP_OK) {
+    Serial.println("OTA validation status: running image marked valid.");
+  } else {
+    Serial.print("OTA validation status: mark valid failed (");
+    Serial.print((int)markResult);
+    Serial.println(").");
+  }
+}
+
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
                       const FaultPolicySnapshot& policySnapshot,
                       uint32_t sampleAgeMs,
@@ -515,6 +552,21 @@ void handleSerialCommand(const char* command) {
     return;
   }
 
+  if (strcmp(command, "ota status") == 0 || strcmp(command, "ota") == 0) {
+    otaUploadServer.printStatus(Serial);
+    return;
+  }
+
+  if (strcmp(command, "ota enable") == 0) {
+    otaUploadServer.enable(millis(), Serial);
+    return;
+  }
+
+  if (strcmp(command, "ota cancel") == 0) {
+    otaUploadServer.cancel(Serial);
+    return;
+  }
+
   if (strcmp(command, "publish") == 0) {
     if (!lastFaultSnapshotValid) {
       Serial.println("Telemetry not ready yet. Wait for the first diagnostics cycle.");
@@ -631,6 +683,7 @@ void setup() {
   const bool sensorBusReady = sensorManager.begin(millis());
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
   lastControlSnapshot = ControlEngine::compute(buildControlInputs(sensorSnapshot));
+  confirmRunningOtaImageIfNeeded();
 
   Serial.println();
   Serial.println("Aquarium cooling controller");
@@ -670,6 +723,8 @@ void setup() {
   printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
   mqttTelemetry.begin(millis());
+  otaUploadServer.begin(
+      kFirmwareName, kFirmwareVersion, kFirmwareIdentityTag, kFirmwareVersionTag);
   mqttTelemetry.printStatus(Serial);
   printHelp();
 }
@@ -695,6 +750,7 @@ void loop() {
   fanDriver.update(nowMs);
   rpmMonitor.update(nowMs);
   mqttTelemetry.update(nowMs);
+  otaUploadServer.update(nowMs);
 
   if (nowMs - lastDiagnosticsMs < kDiagnosticsIntervalMs) {
     return;

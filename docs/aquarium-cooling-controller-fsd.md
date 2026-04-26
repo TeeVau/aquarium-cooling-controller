@@ -58,8 +58,8 @@ and sensor cabling can remain short and serviceable.
 4. The controller computes `final_pwm = max(water_based_pwm, air_based_min_pwm)`.
 5. The ESP32 drives the fan, measures tachometer RPM, and evaluates
    plausibility above the stable operating range.
-6. Wi-Fi and MQTT publish telemetry, perform OTA update checks/downloads, and
-   optionally update non-critical settings.
+6. Wi-Fi and MQTT publish telemetry, and a manually enabled OTA maintenance
+   mode can accept a local firmware binary upload when service is required.
 7. Faults are latched and reported without stopping local autonomous control
    unless a defined fault policy requires a safe fallback state.
 
@@ -85,7 +85,7 @@ Non-critical functions:
 
 - Wi-Fi connection management
 - MQTT publish/subscribe
-- OTA update client
+- Temporarily enabled OTA upload service
 - Remote parameter updates
 - Diagnostic telemetry
 
@@ -98,8 +98,9 @@ Runtime interactions:
 5. RPM monitor measures actual fan speed.
 6. Fault monitor compares measured RPM to the expected curve.
 7. Telemetry layer publishes state and accepts approved remote settings.
-8. OTA client checks for approved updates and coordinates safe firmware
-   download and activation.
+8. The OTA upload service remains disabled during normal operation and, after
+   explicit service activation, accepts a single local firmware binary upload
+   for validation and activation.
 
 ### 2.2 Hardware / Platform Architecture
 
@@ -173,7 +174,7 @@ Planned software modules:
 | `fault_monitor` | Plausibility checking, debounce, fault latching |
 | `fault_policy` | Alarm classification, severity, and local fault response |
 | `telemetry` | Wi-Fi, MQTT publish/subscribe, diagnostics |
-| `ota_client` | OTA metadata lookup, download, validation, update handoff |
+| `ota_upload_server` | Temporary BIN-only OTA upload endpoint, image validation, update handoff |
 
 Boot sequence:
 
@@ -183,8 +184,8 @@ Boot sequence:
 4. Validate configuration and fall back to defaults if invalid.
 5. Start local control and safety monitoring.
 6. Attempt Wi-Fi/MQTT connectivity after local control is operational.
-7. Enable OTA client functionality only after local control startup has
-   completed.
+7. Keep OTA upload functionality disabled until local control startup has
+   completed and an operator explicitly enables the OTA maintenance window.
 
 Persistence model:
 
@@ -204,7 +205,15 @@ Update model:
   (`MAJOR.MINOR.PATCH`) as defined by <https://semver.org/>.
 - Firmware release history shall be maintained in a `CHANGELOG.md` file using
   the Keep a Changelog format defined by <https://keepachangelog.com/>.
-- Production firmware shall support OTA updates over the WLAN client.
+- Production firmware shall support OTA updates through a manually enabled,
+  temporary local upload endpoint on the ESP32.
+- OTA shall use the compiled firmware `.bin` image directly. ZIP archives,
+  manifest files, and external update polling are not part of the initial OTA
+  workflow.
+- The OTA upload endpoint shall not require a password or token. Protection is
+  provided by keeping the endpoint disabled by default, limiting the active
+  upload window, accepting one upload attempt per activation, and validating the
+  received firmware image.
 - OTA shall be treated as a non-critical service and shall not block local
   cooling startup.
 - OTA failures shall leave the device on the previously working firmware.
@@ -281,20 +290,22 @@ Scope:
 
 - Add Wi-Fi connectivity
 - Publish telemetry and fault state over MQTT
-- Add OTA firmware update capability over the WLAN client
+- Add manually enabled BIN-only OTA firmware upload capability over the WLAN
+  client
 - Accept validated remote configuration updates
 - Keep local control fully autonomous during network outages
 
-Current implementation note: The first Wi-Fi/MQTT increment implements
-publish-only telemetry and network diagnostics and has been verified against
-the local MQTT broker. MQTT remote configuration and OTA remain planned
-follow-up work. A FHEM `MQTT2_DEVICE` integration is provided as a
-monitoring-only consumer for the verified telemetry topics.
+Current implementation note: Wi-Fi/MQTT publish telemetry and network
+diagnostics are implemented and verified against the local MQTT broker.
+Manual BIN-only OTA upload is also implemented and bench-verified on a bare
+ESP32 target. MQTT remote configuration remains planned follow-up work. A FHEM
+`MQTT2_DEVICE` integration is provided as a monitoring-only consumer for the
+verified telemetry topics.
 
 Deliverables:
 
 - MQTT topic implementation
-- OTA update workflow
+- BIN-only OTA upload workflow
 - Telemetry and status publishing
 - FHEM monitoring integration for current MQTT telemetry
 - Validated remote settings workflow
@@ -302,14 +313,14 @@ Deliverables:
 Exit criteria:
 
 - MQTT publishes required state and diagnostics
-- OTA update can be downloaded and applied over Wi-Fi
+- OTA firmware image can be uploaded locally, validated, and applied over Wi-Fi
 - Approved remote settings are persisted
 - Network loss does not interrupt cooling autonomy
 
 Dependencies:
 
 - Phase 2 production controller complete
-- MQTT broker, OTA endpoint, and Wi-Fi credentials available
+- MQTT broker and Wi-Fi credentials available
 
 ## 4. Functional Requirements
 
@@ -396,14 +407,17 @@ Dependencies:
 - FR-4.3 [Should]: The production controller should support a manual override
   mode for service or testing with explicit validation and clear state
   reporting.
-- FR-4.4 [Must]: The production controller shall support OTA firmware updates
-  over the WLAN client.
-- FR-4.5 [Must]: The production controller shall start OTA activity only after
-  local cooling control is already active.
-- FR-4.6 [Must]: The production controller shall validate OTA metadata and
-  firmware image integrity before activating a downloaded firmware image.
+- FR-4.4 [Must]: The production controller shall support manual BIN-only OTA
+  firmware upload over the WLAN client through a temporary ESP32-hosted upload
+  endpoint.
+- FR-4.5 [Must]: The production controller shall start OTA upload activity only
+  after local cooling control is already active and an operator explicitly
+  enables the OTA maintenance window.
+- FR-4.6 [Must]: The production controller shall validate the uploaded firmware
+  image size, ESP32 image validity, firmware release identity, and update result
+  before activating the uploaded firmware image.
 - FR-4.7 [Must]: The production controller shall preserve the last working
-  firmware if OTA download, validation, or activation fails.
+  firmware if OTA upload, validation, or activation fails.
 - FR-4.8 [Should]: The production controller should publish OTA state and last
   update result through diagnostics or MQTT status topics.
 - FR-4.9 [Should]: The repository should provide a local home-automation
@@ -434,7 +448,8 @@ Dependencies:
 - NFR-1.10 [Must]: OTA update handling must not delay or block the start of
   local autonomous cooling beyond normal network-service initialization.
 - NFR-1.11 [Must]: OTA update integrity must be verifiable before a new
-  firmware image is activated.
+  firmware image is activated through ESP32 image validation and release
+  identity checks.
 - NFR-1.12 [Must]: Production firmware version numbers shall follow Semantic
   Versioning 2.0.0 as `MAJOR.MINOR.PATCH`, with optional pre-release or build
   metadata only when it conforms to the SemVer specification.
@@ -467,6 +482,7 @@ Dependencies:
 | DS18B20 bus or role mapping errors swap water and air sensors | Low | High | Assign roles by ROM ID and verify mapping at commissioning |
 | Fault reaction for confirmed fan fault remains underspecified | Medium | High | Finalize explicit reaction before production release |
 | Enclosure placement near the aquarium lid increases heat, humidity, or splash exposure | Medium | High | Use protected mounting position, cable management, and enclosure design with environmental margin |
+| Unauthenticated OTA upload window is reachable by other clients on the local network | Low | High | Keep OTA disabled by default, require explicit service activation, limit the upload window, accept one upload attempt, and validate firmware identity before activation |
 
 ### Assumptions
 
@@ -476,8 +492,8 @@ Dependencies:
   point until measured tuning data is available (assumed).
 - The aquarium lid has both a dedicated fan opening and a separate air outlet,
   allowing effective airflow (assumed from project notes).
-- The OTA source will be reachable through the same Wi-Fi client connectivity
-  used for telemetry and remote configuration (assumed).
+- OTA uploads will be performed from a trusted client on the same local network
+  during a short, explicitly enabled maintenance window (assumed).
 
 ### External Dependencies
 
@@ -518,7 +534,7 @@ Dependencies:
 | USB serial | ESP32 -> host | Diagnostics and characterization output |
 | Wi-Fi | ESP32 <-> LAN | Production telemetry transport |
 | MQTT | ESP32 <-> broker | Production state publish and remote set commands |
-| OTA endpoint | ESP32 <- update service | Firmware metadata and image download over Wi-Fi |
+| OTA upload endpoint | host -> ESP32 | Temporary local upload of one compiled firmware `.bin` image over Wi-Fi |
 
 #### MQTT Topic Proposal
 
@@ -573,8 +589,8 @@ the firmware does not yet subscribe to or validate remote `/set/...` topics.
 
 | Element | Direction | Purpose |
 |---|---|---|
-| OTA manifest or version endpoint | ESP32 <- service | Check whether a newer approved firmware exists |
-| OTA firmware image URL | ESP32 <- service | Download candidate firmware image |
+| OTA enable command | operator -> ESP32 | Open a short maintenance window for local firmware upload |
+| OTA upload endpoint | host -> ESP32 | Accept one compiled firmware `.bin` image; no ZIP, manifest, password, or token |
 | OTA result status | publish/log | Report update progress, success, or failure |
 
 ### 6.2 Internal Interfaces
@@ -652,8 +668,8 @@ operation and diagnostics:
 | `help` | Print the supported command list |
 
 Future production command inputs may additionally be represented by validated
-MQTT set topics, OTA metadata requests, and firmware-image download
-transactions over Wi-Fi. Characterization mode remains fully automatic with no
+MQTT set topics and an explicitly enabled OTA firmware upload maintenance
+window over Wi-Fi. Characterization mode remains fully automatic with no
 runtime command input.
 
 ## 7. Operational Procedures
@@ -675,8 +691,12 @@ runtime command input.
 9. Assign or update the production firmware SemVer version and update
    `CHANGELOG.md` before building a release candidate.
 10. Flash production firmware after control and fault parameters are finalized.
-11. Configure the OTA endpoint and verify the OTA path after Wi-Fi integration is
+11. Verify the temporary BIN-only OTA upload path after Wi-Fi integration is
    available.
+12. Treat `.arduino-build/` as the canonical working build path and `build/`
+    as the canonical export/log directory. The sketch-local
+    `firmware/controller/build/` directory is an ignored Arduino tooling
+    artifact and may be deleted at any time.
 
 ### Provisioning / Configuration
 
@@ -685,8 +705,8 @@ runtime command input.
 3. Validate persisted values at boot.
 4. In production mode, connect to Wi-Fi and MQTT only after local control is
    active.
-5. Configure OTA endpoint, update policy, and any required credentials before
-   enabling OTA in production.
+5. Configure the OTA upload policy before enabling OTA in production. The
+   initial OTA design shall not require a password or token.
 6. Verify terminal labeling and cable assignment for fan, water sensor, and air
    sensor during commissioning.
 
@@ -699,8 +719,8 @@ runtime command input.
 5. Allow settling time after PWM changes before plausibility evaluation.
 6. Measure fan RPM and evaluate plausibility where valid.
 7. Publish telemetry and accept validated remote settings when connected.
-8. Check for OTA updates only as a non-critical background activity while local
-   control remains active.
+8. Keep OTA upload disabled unless an operator explicitly opens the maintenance
+   window while local control remains active.
 
 ### Maintenance Procedures
 
@@ -708,8 +728,8 @@ runtime command input.
 2. Re-run characterization if the installed airflow path changes materially.
 3. Inspect diagnostics for drift between expected and measured RPM.
 4. Verify sensor ROM-ID assignment after replacing a DS18B20 sensor.
-5. Trigger and verify OTA updates only when the system is in a stable operating
-   condition and the update source is trusted.
+5. Trigger and verify OTA uploads only when the system is in a stable operating
+   condition and the local network client is trusted.
 6. Before publishing a firmware release, verify that the firmware version is a
    valid SemVer value and that `CHANGELOG.md` contains a corresponding Keep a
    Changelog release entry.
@@ -730,7 +750,7 @@ runtime command input.
    critical `fan-fault`, and require service. Hardware tests with missing tach
    feedback and a deliberately slowed fan verified this response; no automatic
    fan-fault boost is currently applied.
-6. On OTA download or validation failure, remain on the currently working
+6. On OTA upload or validation failure, remain on the currently working
    firmware and report the failed update state.
 
 ## 8. Verification & Validation
@@ -763,7 +783,7 @@ runtime command input.
 | TC-P2-11 | Critical/runtime memory discipline | Inspect critical control path under normal operation and review implementation for avoidable heap use | No unnecessary dynamic allocation is present in critical runtime paths |
 | TC-P2-12 | Control/communication separation | Review module boundaries and disable network stack during runtime tests | Local control remains operational with communication logic absent or inactive |
 | TC-P2-13 | Boot sequencing | Boot with valid persisted config and delayed/unavailable network | Local control becomes valid before network initialization is required |
-| TC-P2-14 | OTA non-blocking startup | Boot with OTA enabled and reachable or unreachable OTA endpoint | Local cooling starts before OTA activity begins |
+| TC-P2-14 | OTA non-blocking startup | Boot with OTA support compiled in and no active OTA maintenance window | Local cooling starts before any OTA upload service is available |
 | TC-P2-15 | Enclosure integration | Install USB-C PD board, 5 V PSU, ESP32, and terminal blocks into the printed enclosure | All required hardware fits and remains mechanically serviceable |
 | TC-P2-16 | Mounting and cable routing | Mount the enclosure above the aquarium frame near the lighting area and route all field wiring | Fan and sensor cable runs are short, orderly, and terminate correctly at the enclosure |
 
@@ -777,8 +797,8 @@ runtime command input.
 | AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected |
 | AT-05 | FHEM MQTT2 monitoring | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings without issuing control commands |
 | AT-06 | Installed fan plausibility | Run controller in actual aquarium installation | Fan plausibility behaves correctly in the real airflow path |
-| AT-07 | OTA success path | Offer a newer valid firmware image via Wi-Fi OTA endpoint | Firmware downloads, validates, activates, and reports success |
-| AT-08 | OTA failure rollback | Interrupt or invalidate OTA image during update test | Device preserves current working firmware and reports failure |
+| AT-07 | OTA success path | Enable the OTA maintenance window and upload a newer valid `.bin` firmware image from the local network | Firmware uploads, validates, activates, and reports success |
+| AT-08 | OTA failure rollback | Interrupt upload or upload an invalid `.bin` image during update test | Device preserves current working firmware and reports failure |
 | AT-09 | Installed enclosure concept | Install the full system in the intended rear upper mounting position | Electronics are centralized, accessible, and cable routing is practical |
 | AT-10 | Release versioning and changelog | Inspect a release candidate before publication | Firmware version follows SemVer 2.0.0 and `CHANGELOG.md` follows Keep a Changelog with a matching release entry |
 
@@ -823,11 +843,11 @@ Status interpretation in this matrix:
 | FR-4.1 | Must | AT-03 | Bench-verified |
 | FR-4.2 | Must | AT-04 | Planned |
 | FR-4.3 | Should | AT-04 | Planned |
-| FR-4.4 | Must | AT-07, AT-08 | Planned |
-| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-07 | Planned |
-| FR-4.6 | Must | AT-07, AT-08 | Planned |
-| FR-4.7 | Must | AT-08 | Planned |
-| FR-4.8 | Should | AT-07, AT-08 | Planned |
+| FR-4.4 | Must | AT-07, AT-08 | Bench-verified |
+| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-07 | Bench-verified |
+| FR-4.6 | Must | AT-07, AT-08 | Bench-verified |
+| FR-4.7 | Must | AT-08 | Implemented |
+| FR-4.8 | Should | AT-07, AT-08 | Implemented |
 | FR-4.9 | Should | AT-05 | Implemented |
 | NFR-1.1 | Must | AT-01 | Bench-verified |
 | NFR-1.2 | Must | TC-P2-02, AT-06 | Bench-verified |
@@ -838,8 +858,8 @@ Status interpretation in this matrix:
 | NFR-1.7 | Must | TC-P2-07, TC-P2-08, TC-P2-09, AT-03 | Bench-verified |
 | NFR-1.8 | Should | TC-P2-13, AT-01, AT-02 | Implemented |
 | NFR-1.9 | Must | TC-P1-01 | Covered |
-| NFR-1.10 | Must | TC-P2-14, AT-01 | Planned |
-| NFR-1.11 | Must | AT-07, AT-08 | Planned |
+| NFR-1.10 | Must | TC-P2-14, AT-01 | Bench-verified |
+| NFR-1.11 | Must | AT-07, AT-08 | Bench-verified |
 | NFR-1.12 | Must | AT-10 | Planned |
 | NFR-1.13 | Must | AT-10 | Planned |
 
@@ -854,8 +874,9 @@ Status interpretation in this matrix:
 | Cooling stops after water sensor issue | Fallback behavior not configured or not applied correctly | Inspect fault logs and safe fallback branch | Implement and verify defined safe fallback PWM |
 | MQTT updates seem ignored | Network unavailable or payload invalid | Check broker connection and validation logs | Restore connectivity or send valid payload |
 | FHEM readings do not update | FHEM IODev or topic root does not match the broker traffic | Compare the serial `network` root topic with the FHEM `readingList`; inspect broker traffic for `<root>/status/availability` | Correct the IODev, subscription, credentials, or root topic |
-| OTA update does not start | OTA endpoint unreachable or update policy not satisfied | Check Wi-Fi state, OTA endpoint, and OTA diagnostics | Restore connectivity or correct OTA configuration |
-| OTA update fails validation | Corrupt image, metadata mismatch, or unsupported image | Inspect OTA result code and firmware metadata | Rebuild or republish a valid firmware image |
+| OTA upload page is not reachable | OTA maintenance window is not enabled, Wi-Fi is unavailable, or the window timed out | Check Wi-Fi state, OTA state, and serial/MQTT diagnostics | Enable OTA maintenance mode again or restore Wi-Fi connectivity |
+| OTA update fails validation | Corrupt image, wrong firmware image, unsupported image, or image too large for the OTA slot | Inspect OTA result code and firmware release identity diagnostics | Rebuild and upload a valid firmware `.bin` image |
+| Duplicate firmware binaries appear under `firmware/controller/build/` | Arduino tooling created a sketch-local build artifact directory in addition to the repository-standard artifact folders | Inspect `build.options.json` under `firmware/controller/build/` and compare it with the documented CLI build paths | Keep `.arduino-build/` as the working build path, keep root `build/` for exported artifacts and logs, and delete the sketch-local `build/` tree when it is no longer needed |
 | Cable routing is awkward or too long | Enclosure position or terminal layout is poorly chosen | Inspect mounted enclosure position and wiring paths | Move enclosure or revise terminal placement in the printed design |
 | Moisture or heat exposure threatens electronics | Mounting location too close to splash or trapped warm air | Inspect rear upper mounting environment during operation | Add shielding, revise enclosure geometry, or adjust placement |
 
@@ -912,7 +933,18 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 - Each published firmware version shall have a corresponding changelog release
   section with the release date.
 
-### D. Mechanical Integration Summary
+### D. Build Artifact Directory Policy
+
+- `.arduino-build/esp32_esp32_esp32/` is the canonical working build path for
+  repository-standard `arduino-cli` compile and upload commands.
+- `build/` is the canonical location for exported firmware binaries, merged
+  images, and local serial or bench-capture logs.
+- `firmware/controller/build/` is a sketch-local Arduino tooling artifact
+  directory that may contain duplicated binaries and `build.options.json`.
+- The sketch-local `firmware/controller/build/` tree is ignored by Git and may
+  be deleted whenever it is not actively needed by local tooling.
+
+### E. Mechanical Integration Summary
 
 | Item | Requirement |
 |---|---|
@@ -922,7 +954,7 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 | Preferred mounting position | Above aquarium frame, rear side, near lighting |
 | Design intent | Short cable runs, centralized electronics, serviceable installation |
 
-### E. Wiring Summary
+### F. Wiring Summary
 
 | Signal | Mapping |
 |---|---|
@@ -931,7 +963,7 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 | Fan Power | fan pin 2 -> +12 V, fan pin 1 -> GND |
 | DS18B20 bus | ESP32 GPIO33 shared 1-Wire bus with 3.3 kOhm pull-up to 3.3 V |
 
-### F. Verified Fan Characterization Result
+### G. Verified Fan Characterization Result
 
 Latest verified bench result on `2026-04-12` with `Noctua NF-S12A PWM`:
 
@@ -975,16 +1007,17 @@ FanCurvePoint curve[] = {
 };
 ```
 
-### G. Open Points Requiring Finalization
+### H. Open Points Requiring Finalization
 
 - Final plausibility tolerance percentage after measured tuning
 - Final hardware implementation of PWM electrical compatibility
 - Whether manual override remains enabled in production firmware
 - Whether installed airflow requires a separate in-situ fan curve
-- Exact OTA manifest format, approval policy, and authentication details
+- Exact OTA upload window duration, enable command surface, and validation
+  policy details
 - Exact enclosure geometry, mounting method, and splash-protection details
 
-### H. Draft Schematic Sketch
+### I. Draft Schematic Sketch
 
 - Mermaid source: `docs/design/schematic-sketch.mmd`
 - Usage: paste the Mermaid source into draw.io via `Arrange -> Insert ->

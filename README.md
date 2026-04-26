@@ -43,7 +43,8 @@ The repository currently contains both:
 
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
-Current firmware release: `0.1.0` (`2026-04-20`).
+Latest released firmware: `0.1.0` (`2026-04-20`).
+Current OTA development version on this branch: `0.1.2` (`Unreleased`).
 
 Implemented and bench-verified:
 
@@ -67,13 +68,13 @@ Implemented and broker-verified:
 - local secret override via ignored `network_config.local.h`
 - broker-side normal telemetry capture
 - broker-side fault telemetry for air sensor, water sensor, and fan-fault cases
+- manually enabled BIN-only OTA upload with live bench validation on a bare ESP32
 
 Still intentionally open:
 
 - real-aquarium tuning of water and air control behavior
 - longer real-aquarium live data capture after the first 2 h installed run
 - MQTT remote configuration
-- OTA update path
 
 ## Features
 
@@ -91,6 +92,7 @@ Implemented now:
 - Central fault-policy model with alarm severity and response labels
 - Hardware-verified fault responses for sensor failures and fan plausibility faults
 - Wi-Fi/MQTT telemetry that does not block local cooling
+- Manually enabled BIN-only OTA firmware upload over Wi-Fi
 - Serial service commands for diagnostics and bench operation
 
 Planned next:
@@ -98,7 +100,7 @@ Planned next:
 - longer aquarium-side live data capture
 - aquarium-side control tuning with recorded live operating data
 - MQTT remote parameter updates
-- OTA firmware updates over Wi-Fi
+- OTA validation on the fully wired controller hardware
 
 ## Hardware
 
@@ -255,6 +257,12 @@ Subscribe to MQTT telemetry with the helper script:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Count 45
 ```
+
+Build artifact layout used in this repository:
+
+- `.arduino-build/esp32_esp32_esp32/`: canonical working build path used by the documented `arduino-cli` compile and upload commands
+- `build/`: exported firmware binaries plus local bench logs and serial captures
+- `firmware/controller/build/`: sketch-local Arduino tooling artifact directory created when Arduino tooling uses a sketch-local build path; it often contains duplicated binaries and `build.options.json`, is ignored by Git, and is safe to delete
 
 ## Usage
 
@@ -462,7 +470,7 @@ Next likely steps:
 
 1. Extend the first installed aquarium capture to longer live data for water and air control tuning.
 2. Add MQTT remote parameter updates with validation and persistence.
-3. Add OTA support over Wi-Fi.
+3. Extend OTA validation from the bare ESP32 bench target to the fully wired controller.
 4. Finalize enclosure, wiring, and installation layout for the real aquarium.
 5. Re-check fan plausibility in the final installed airflow path.
 

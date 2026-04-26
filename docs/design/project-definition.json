@@ -7,7 +7,7 @@
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, broker-verified publish-only MQTT telemetry, and documented FHEM MQTT2 monitoring integration"
+    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, broker-verified publish-only MQTT telemetry, bench-verified BIN-only OTA upload, and documented FHEM MQTT2 monitoring integration"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -274,7 +274,7 @@
     }
   },
   "mqtt": {
-    "design_status": "Publish-only MQTT telemetry foundation is implemented and broker-verified; remote configuration and OTA remain planned",
+    "design_status": "Publish-only MQTT telemetry foundation is implemented and broker-verified; manual BIN-only OTA upload is implemented and bench-verified; remote configuration remains planned",
     "functional_requirements": {
       "publish": [
         "water temperature",
@@ -389,11 +389,11 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "Publish-only MQTT telemetry foundation is implemented, broker-verified, documented, and paired with a FHEM MQTT2 monitoring definition",
+    "current_task": "BIN-only OTA upload is implemented and bench-verified on a bare ESP32 target alongside the broker-verified publish-only MQTT telemetry foundation",
     "next_expected_tasks": [
         "Tune water and air control behavior with live aquarium data",
         "Add MQTT remote configuration",
-        "Add OTA support",
+        "Validate OTA on the fully wired controller hardware",
         "Finalize enclosure and wiring for the installed system"
     ],
     "instructions_for_codex": [
