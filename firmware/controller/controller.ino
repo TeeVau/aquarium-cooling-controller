@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include <esp_arduino_version.h>
+#include <esp_ota_ops.h>
 #include <Preferences.h>
 
 #include "control_engine.h"
@@ -15,8 +16,12 @@
 
 namespace {
 
+#define AQ_FIRMWARE_VERSION "0.1.2"
+
 constexpr char kFirmwareName[] = "aq-cooling-controller";
-constexpr char kFirmwareVersion[] = "0.1.0";
+constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
+constexpr char kFirmwareIdentityTag[] = "AQFW_PRODUCT=aq-cooling-controller";
+constexpr char kFirmwareVersionTag[] = "AQFW_VERSION=" AQ_FIRMWARE_VERSION;
 constexpr uint32_t kDiagnosticsIntervalMs = 2000;
 constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
@@ -340,23 +345,31 @@ void printFaultPolicyDefaults() {
   Serial.println(" ms");
 }
 
-bool otaEnableAllowed(Stream& out) {
-  if (!lastFaultSnapshotValid) {
-    out.println("OTA upload not enabled. Wait for the first diagnostics cycle.");
-    return false;
+void confirmRunningOtaImageIfNeeded() {
+  const esp_partition_t* runningPartition = esp_ota_get_running_partition();
+  if (runningPartition == nullptr) {
+    Serial.println("OTA validation status: running partition unavailable.");
+    return;
   }
 
-  if (lastFaultPolicySnapshot.severity == FaultSeverity::kCritical) {
-    out.println("OTA upload not enabled while a critical fault is active.");
-    return false;
+  esp_ota_img_states_t otaState = ESP_OTA_IMG_UNDEFINED;
+  if (esp_ota_get_state_partition(runningPartition, &otaState) != ESP_OK) {
+    Serial.println("OTA validation status: state check unavailable.");
+    return;
   }
 
-  if (fanDriver.isStartBoostActive()) {
-    out.println("OTA upload not enabled while fan start boost is active.");
-    return false;
+  if (otaState != ESP_OTA_IMG_PENDING_VERIFY) {
+    return;
   }
 
-  return true;
+  const esp_err_t markResult = esp_ota_mark_app_valid_cancel_rollback();
+  if (markResult == ESP_OK) {
+    Serial.println("OTA validation status: running image marked valid.");
+  } else {
+    Serial.print("OTA validation status: mark valid failed (");
+    Serial.print((int)markResult);
+    Serial.println(").");
+  }
 }
 
 void printDiagnostics(const FaultMonitorSnapshot& snapshot,
@@ -496,9 +509,7 @@ void handleSerialCommand(const char* command) {
   }
 
   if (strcmp(command, "ota enable") == 0) {
-    if (otaEnableAllowed(Serial)) {
-      otaUploadServer.enable(millis(), Serial);
-    }
+    otaUploadServer.enable(millis(), Serial);
     return;
   }
 
@@ -615,6 +626,7 @@ void setup() {
   const bool sensorBusReady = sensorManager.begin(millis());
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
   lastControlSnapshot = ControlEngine::compute(buildControlInputs(sensorSnapshot));
+  confirmRunningOtaImageIfNeeded();
 
   Serial.println();
   Serial.println("Aquarium cooling controller");
@@ -654,7 +666,8 @@ void setup() {
   printDiscoveredBusSensors(sensorSnapshot);
   printCurveSummary();
   mqttTelemetry.begin(millis());
-  otaUploadServer.begin(kFirmwareName, kFirmwareVersion);
+  otaUploadServer.begin(
+      kFirmwareName, kFirmwareVersion, kFirmwareIdentityTag, kFirmwareVersionTag);
   mqttTelemetry.printStatus(Serial);
   printHelp();
 }

@@ -12,12 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added first BIN-only OTA upload implementation with a temporary ESP32-hosted
   upload endpoint and serial `ota status`, `ota enable`, and `ota cancel`
   commands.
+- Added explicit firmware identity and firmware-version tags inside the OTA
+  image so OTA validation does not depend on Arduino `PROJECT_NAME` or ESP32
+  build metadata.
 
 ### Changed
 
 - Updated the OTA specification to use a manual BIN-only ESP32 upload
   maintenance mode without ZIP archives, manifests, external update polling,
   passwords, or tokens.
+- Hardened BIN-only OTA validation to reject incomplete uploads, confirm the
+  freshly booted OTA image for rollback handling, and validate uploads against
+  the intended firmware identity plus a newer SemVer release.
+- Documented the repository's canonical build artifact layout:
+  `.arduino-build/` for working compilation state, `build/` for exported
+  binaries and bench logs, and `firmware/controller/build/` as a disposable
+  Arduino tooling artifact directory.
+- Verified the BIN-only OTA workflow on a bare ESP32 bench target, including
+  manual enable, live HTTP upload, validation failure paths, and a successful
+  OTA upgrade with reboot into the new firmware.
 
 ## [0.1.0] - 2026-04-20
 

@@ -295,11 +295,12 @@ Scope:
 - Accept validated remote configuration updates
 - Keep local control fully autonomous during network outages
 
-Current implementation note: The first Wi-Fi/MQTT increment implements
-publish-only telemetry and network diagnostics and has been verified against
-the local MQTT broker. MQTT remote configuration and OTA remain planned
-follow-up work. A FHEM `MQTT2_DEVICE` integration is provided as a
-monitoring-only consumer for the verified telemetry topics.
+Current implementation note: Wi-Fi/MQTT publish telemetry and network
+diagnostics are implemented and verified against the local MQTT broker.
+Manual BIN-only OTA upload is also implemented and bench-verified on a bare
+ESP32 target. MQTT remote configuration remains planned follow-up work. A FHEM
+`MQTT2_DEVICE` integration is provided as a monitoring-only consumer for the
+verified telemetry topics.
 
 Deliverables:
 
@@ -692,6 +693,10 @@ runtime command input.
 10. Flash production firmware after control and fault parameters are finalized.
 11. Verify the temporary BIN-only OTA upload path after Wi-Fi integration is
    available.
+12. Treat `.arduino-build/` as the canonical working build path and `build/`
+    as the canonical export/log directory. The sketch-local
+    `firmware/controller/build/` directory is an ignored Arduino tooling
+    artifact and may be deleted at any time.
 
 ### Provisioning / Configuration
 
@@ -838,11 +843,11 @@ Status interpretation in this matrix:
 | FR-4.1 | Must | AT-03 | Bench-verified |
 | FR-4.2 | Must | AT-04 | Planned |
 | FR-4.3 | Should | AT-04 | Planned |
-| FR-4.4 | Must | AT-07, AT-08 | Planned |
-| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-07 | Planned |
-| FR-4.6 | Must | AT-07, AT-08 | Planned |
-| FR-4.7 | Must | AT-08 | Planned |
-| FR-4.8 | Should | AT-07, AT-08 | Planned |
+| FR-4.4 | Must | AT-07, AT-08 | Bench-verified |
+| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-07 | Bench-verified |
+| FR-4.6 | Must | AT-07, AT-08 | Bench-verified |
+| FR-4.7 | Must | AT-08 | Implemented |
+| FR-4.8 | Should | AT-07, AT-08 | Implemented |
 | FR-4.9 | Should | AT-05 | Implemented |
 | NFR-1.1 | Must | AT-01 | Bench-verified |
 | NFR-1.2 | Must | TC-P2-02, AT-06 | Bench-verified |
@@ -853,8 +858,8 @@ Status interpretation in this matrix:
 | NFR-1.7 | Must | TC-P2-07, TC-P2-08, TC-P2-09, AT-03 | Bench-verified |
 | NFR-1.8 | Should | TC-P2-13, AT-01, AT-02 | Implemented |
 | NFR-1.9 | Must | TC-P1-01 | Covered |
-| NFR-1.10 | Must | TC-P2-14, AT-01 | Planned |
-| NFR-1.11 | Must | AT-07, AT-08 | Planned |
+| NFR-1.10 | Must | TC-P2-14, AT-01 | Bench-verified |
+| NFR-1.11 | Must | AT-07, AT-08 | Bench-verified |
 | NFR-1.12 | Must | AT-10 | Planned |
 | NFR-1.13 | Must | AT-10 | Planned |
 
@@ -871,6 +876,7 @@ Status interpretation in this matrix:
 | FHEM readings do not update | FHEM IODev or topic root does not match the broker traffic | Compare the serial `network` root topic with the FHEM `readingList`; inspect broker traffic for `<root>/status/availability` | Correct the IODev, subscription, credentials, or root topic |
 | OTA upload page is not reachable | OTA maintenance window is not enabled, Wi-Fi is unavailable, or the window timed out | Check Wi-Fi state, OTA state, and serial/MQTT diagnostics | Enable OTA maintenance mode again or restore Wi-Fi connectivity |
 | OTA update fails validation | Corrupt image, wrong firmware image, unsupported image, or image too large for the OTA slot | Inspect OTA result code and firmware release identity diagnostics | Rebuild and upload a valid firmware `.bin` image |
+| Duplicate firmware binaries appear under `firmware/controller/build/` | Arduino tooling created a sketch-local build artifact directory in addition to the repository-standard artifact folders | Inspect `build.options.json` under `firmware/controller/build/` and compare it with the documented CLI build paths | Keep `.arduino-build/` as the working build path, keep root `build/` for exported artifacts and logs, and delete the sketch-local `build/` tree when it is no longer needed |
 | Cable routing is awkward or too long | Enclosure position or terminal layout is poorly chosen | Inspect mounted enclosure position and wiring paths | Move enclosure or revise terminal placement in the printed design |
 | Moisture or heat exposure threatens electronics | Mounting location too close to splash or trapped warm air | Inspect rear upper mounting environment during operation | Add shielding, revise enclosure geometry, or adjust placement |
 
@@ -927,7 +933,18 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 - Each published firmware version shall have a corresponding changelog release
   section with the release date.
 
-### D. Mechanical Integration Summary
+### D. Build Artifact Directory Policy
+
+- `.arduino-build/esp32_esp32_esp32/` is the canonical working build path for
+  repository-standard `arduino-cli` compile and upload commands.
+- `build/` is the canonical location for exported firmware binaries, merged
+  images, and local serial or bench-capture logs.
+- `firmware/controller/build/` is a sketch-local Arduino tooling artifact
+  directory that may contain duplicated binaries and `build.options.json`.
+- The sketch-local `firmware/controller/build/` tree is ignored by Git and may
+  be deleted whenever it is not actively needed by local tooling.
+
+### E. Mechanical Integration Summary
 
 | Item | Requirement |
 |---|---|
@@ -937,7 +954,7 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 | Preferred mounting position | Above aquarium frame, rear side, near lighting |
 | Design intent | Short cable runs, centralized electronics, serviceable installation |
 
-### E. Wiring Summary
+### F. Wiring Summary
 
 | Signal | Mapping |
 |---|---|
@@ -946,7 +963,7 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 | Fan Power | fan pin 2 -> +12 V, fan pin 1 -> GND |
 | DS18B20 bus | ESP32 GPIO33 shared 1-Wire bus with 3.3 kOhm pull-up to 3.3 V |
 
-### F. Verified Fan Characterization Result
+### G. Verified Fan Characterization Result
 
 Latest verified bench result on `2026-04-12` with `Noctua NF-S12A PWM`:
 
@@ -990,7 +1007,7 @@ FanCurvePoint curve[] = {
 };
 ```
 
-### G. Open Points Requiring Finalization
+### H. Open Points Requiring Finalization
 
 - Final plausibility tolerance percentage after measured tuning
 - Final hardware implementation of PWM electrical compatibility
@@ -1000,7 +1017,7 @@ FanCurvePoint curve[] = {
   policy details
 - Exact enclosure geometry, mounting method, and splash-protection details
 
-### H. Draft Schematic Sketch
+### I. Draft Schematic Sketch
 
 - Mermaid source: `docs/design/schematic-sketch.mmd`
 - Usage: paste the Mermaid source into draw.io via `Arrange -> Insert ->

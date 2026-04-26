@@ -8,9 +8,12 @@
 #include <Update.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <string.h>
 
 namespace {
+
+constexpr char kVersionTagPrefix[] = "AQFW_VERSION=";
 
 const char kUploadForm[] =
     "<!doctype html><html><head><meta name='viewport' "
@@ -33,12 +36,199 @@ void copyMessage(char* target, size_t targetSize, const char* message) {
   snprintf(target, targetSize, "%s", message);
 }
 
+bool parseSemVerCore(const char* version,
+                     uint32_t* major,
+                     uint32_t* minor,
+                     uint32_t* patch) {
+  if (version == nullptr || major == nullptr || minor == nullptr || patch == nullptr) {
+    return false;
+  }
+
+  char* endPtr = nullptr;
+  const unsigned long parsedMajor = strtoul(version, &endPtr, 10);
+  if (endPtr == version || *endPtr != '.') {
+    return false;
+  }
+
+  const char* minorStart = endPtr + 1;
+  const unsigned long parsedMinor = strtoul(minorStart, &endPtr, 10);
+  if (endPtr == minorStart || *endPtr != '.') {
+    return false;
+  }
+
+  const char* patchStart = endPtr + 1;
+  const unsigned long parsedPatch = strtoul(patchStart, &endPtr, 10);
+  if (endPtr == patchStart) {
+    return false;
+  }
+
+  if (*endPtr != '\0' && *endPtr != '-' && *endPtr != '+') {
+    return false;
+  }
+
+  *major = (uint32_t)parsedMajor;
+  *minor = (uint32_t)parsedMinor;
+  *patch = (uint32_t)parsedPatch;
+  return true;
+}
+
+int compareSemVer(const char* left, const char* right) {
+  uint32_t leftMajor = 0;
+  uint32_t leftMinor = 0;
+  uint32_t leftPatch = 0;
+  uint32_t rightMajor = 0;
+  uint32_t rightMinor = 0;
+  uint32_t rightPatch = 0;
+
+  if (!parseSemVerCore(left, &leftMajor, &leftMinor, &leftPatch) ||
+      !parseSemVerCore(right, &rightMajor, &rightMinor, &rightPatch)) {
+    return 0;
+  }
+
+  if (leftMajor != rightMajor) {
+    return leftMajor < rightMajor ? -1 : 1;
+  }
+
+  if (leftMinor != rightMinor) {
+    return leftMinor < rightMinor ? -1 : 1;
+  }
+
+  if (leftPatch != rightPatch) {
+    return leftPatch < rightPatch ? -1 : 1;
+  }
+
+  return 0;
+}
+
+bool partitionContainsTag(const esp_partition_t* partition,
+                          size_t imageSize,
+                          const char* tag) {
+  if (partition == nullptr || tag == nullptr || tag[0] == '\0' || imageSize == 0) {
+    return false;
+  }
+
+  const size_t tagLength = strlen(tag);
+  if (tagLength == 0 || imageSize < tagLength) {
+    return false;
+  }
+
+  constexpr size_t kChunkSize = 256;
+  uint8_t buffer[kChunkSize + 64] = {};
+  size_t carry = 0;
+  size_t offset = 0;
+
+  while (offset < imageSize) {
+    const size_t toRead = (imageSize - offset) < kChunkSize ? (imageSize - offset) : kChunkSize;
+    if (esp_partition_read(partition, offset, buffer + carry, toRead) != ESP_OK) {
+      return false;
+    }
+
+    const size_t windowSize = carry + toRead;
+    for (size_t index = 0; index + tagLength <= windowSize; ++index) {
+      if (memcmp(buffer + index, tag, tagLength) == 0) {
+        return true;
+      }
+    }
+
+    carry = tagLength > 1 ? tagLength - 1 : 0;
+    if (carry > windowSize) {
+      carry = windowSize;
+    }
+    memmove(buffer, buffer + windowSize - carry, carry);
+    offset += toRead;
+  }
+
+  return false;
+}
+
+bool readNullTerminatedValue(const esp_partition_t* partition,
+                             size_t imageSize,
+                             size_t valueOffset,
+                             char* target,
+                             size_t targetSize) {
+  if (partition == nullptr || target == nullptr || targetSize == 0 || valueOffset >= imageSize) {
+    return false;
+  }
+
+  size_t written = 0;
+  while (valueOffset < imageSize && written + 1 < targetSize) {
+    char nextChar = '\0';
+    if (esp_partition_read(partition, valueOffset, &nextChar, 1) != ESP_OK) {
+      return false;
+    }
+
+    if (nextChar == '\0') {
+      target[written] = '\0';
+      return written > 0;
+    }
+
+    target[written++] = nextChar;
+    ++valueOffset;
+  }
+
+  if (written < targetSize) {
+    target[written] = '\0';
+  } else {
+    target[targetSize - 1] = '\0';
+  }
+
+  return false;
+}
+
+bool extractTagValueFromPartition(const esp_partition_t* partition,
+                                  size_t imageSize,
+                                  const char* prefix,
+                                  char* target,
+                                  size_t targetSize) {
+  if (partition == nullptr || prefix == nullptr || target == nullptr || targetSize == 0) {
+    return false;
+  }
+
+  target[0] = '\0';
+  const size_t prefixLength = strlen(prefix);
+  if (prefixLength == 0 || imageSize <= prefixLength) {
+    return false;
+  }
+
+  constexpr size_t kChunkSize = 256;
+  uint8_t buffer[kChunkSize + 64] = {};
+  size_t carry = 0;
+  size_t offset = 0;
+
+  while (offset < imageSize) {
+    const size_t toRead = (imageSize - offset) < kChunkSize ? (imageSize - offset) : kChunkSize;
+    if (esp_partition_read(partition, offset, buffer + carry, toRead) != ESP_OK) {
+      return false;
+    }
+
+    const size_t windowSize = carry + toRead;
+    for (size_t index = 0; index + prefixLength <= windowSize; ++index) {
+      if (memcmp(buffer + index, prefix, prefixLength) == 0) {
+        const size_t absoluteOffset = offset - carry + index + prefixLength;
+        return readNullTerminatedValue(
+            partition, imageSize, absoluteOffset, target, targetSize);
+      }
+    }
+
+    carry = prefixLength > 1 ? prefixLength - 1 : 0;
+    if (carry > windowSize) {
+      carry = windowSize;
+    }
+    memmove(buffer, buffer + windowSize - carry, carry);
+    offset += toRead;
+  }
+
+  return false;
+}
+
 }  // namespace
 
 OtaUploadServer::OtaUploadServer()
     : server_(kHttpPort),
       firmwareName_("unknown"),
       firmwareVersion_("unknown"),
+      firmwareIdentityTag_(""),
+      firmwareVersionTag_(""),
       state_(OtaUploadState::kDisabled),
       initialized_(false),
       serverRunning_(false),
@@ -47,19 +237,27 @@ OtaUploadServer::OtaUploadServer()
       rebootPending_(false),
       updateWriteError_(false),
       enabledAtMs_(0),
+      maxImageSize_(0),
       expectedSize_(0),
       writtenSize_(0),
+      currentVersion_{},
       lastMessage_{} {}
 
 void OtaUploadServer::begin(const char* firmwareName,
-                            const char* firmwareVersion) {
+                            const char* firmwareVersion,
+                            const char* firmwareIdentityTag,
+                            const char* firmwareVersionTag) {
   firmwareName_ = firmwareName != nullptr ? firmwareName : "unknown";
   firmwareVersion_ = firmwareVersion != nullptr ? firmwareVersion : "unknown";
+  firmwareIdentityTag_ = firmwareIdentityTag != nullptr ? firmwareIdentityTag : "";
+  firmwareVersionTag_ = firmwareVersionTag != nullptr ? firmwareVersionTag : "";
 
   if (!initialized_) {
     configureRoutes();
     initialized_ = true;
   }
+
+  copyMessage(currentVersion_, sizeof(currentVersion_), firmwareVersion_);
 
   copyMessage(lastMessage_, sizeof(lastMessage_), "OTA upload disabled.");
 }
@@ -84,7 +282,7 @@ void OtaUploadServer::update(uint32_t nowMs) {
 
 bool OtaUploadServer::enable(uint32_t nowMs, Stream& out) {
   if (!initialized_) {
-    begin(firmwareName_, firmwareVersion_);
+    begin(firmwareName_, firmwareVersion_, firmwareIdentityTag_, firmwareVersionTag_);
   }
 
   if (WiFi.status() != WL_CONNECTED) {
@@ -104,6 +302,7 @@ bool OtaUploadServer::enable(uint32_t nowMs, Stream& out) {
 
   state_ = OtaUploadState::kArmed;
   enabledAtMs_ = nowMs;
+  maxImageSize_ = 0;
   expectedSize_ = 0;
   writtenSize_ = 0;
   uploadStarted_ = false;
@@ -125,6 +324,11 @@ bool OtaUploadServer::enable(uint32_t nowMs, Stream& out) {
 }
 
 void OtaUploadServer::cancel(Stream& out) {
+  if (state_ == OtaUploadState::kUploading) {
+    Update.abort();
+    updateWriteError_ = true;
+  }
+
   if (!serverRunning_) {
     state_ = OtaUploadState::kDisabled;
     copyMessage(lastMessage_, sizeof(lastMessage_), "OTA upload disabled.");
@@ -205,6 +409,48 @@ void OtaUploadServer::failUpload(const char* message) {
   copyMessage(lastMessage_, sizeof(lastMessage_), message);
 }
 
+bool OtaUploadServer::validateUploadedImage() {
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  const esp_partition_t* updated = esp_ota_get_next_update_partition(running);
+  if (updated == nullptr) {
+    copyMessage(lastMessage_, sizeof(lastMessage_), "OTA validation failed: no OTA partition.");
+    return false;
+  }
+
+  if (!partitionContainsTag(updated, writtenSize_, firmwareIdentityTag_)) {
+    copyMessage(lastMessage_,
+                sizeof(lastMessage_),
+                "OTA validation failed: wrong firmware identity.");
+    return false;
+  }
+
+  char uploadedVersion[kIdentityBufferSize] = {};
+  if (!extractTagValueFromPartition(
+          updated, writtenSize_, kVersionTagPrefix, uploadedVersion, sizeof(uploadedVersion))) {
+    copyMessage(lastMessage_,
+                sizeof(lastMessage_),
+                "OTA validation failed: firmware version tag missing.");
+    return false;
+  }
+
+  const int versionCompare = compareSemVer(uploadedVersion, currentVersion_);
+  if (versionCompare <= 0) {
+    snprintf(lastMessage_,
+             sizeof(lastMessage_),
+              "OTA validation failed: version %s is not newer than %s.",
+             uploadedVersion,
+             currentVersion_);
+    return false;
+  }
+
+  snprintf(lastMessage_,
+           sizeof(lastMessage_),
+           "OTA ready: %s %s",
+           firmwareName_,
+           uploadedVersion);
+  return true;
+}
+
 void OtaUploadServer::handleRoot() {
   handleUpdateForm();
 }
@@ -225,6 +471,20 @@ void OtaUploadServer::handleUpdateFinished() {
     return;
   }
 
+  if (!validateUploadedImage()) {
+    failUpload(lastMessage_);
+    server_.send(400, "text/plain", lastMessage_);
+    stopServer(OtaUploadState::kFailed, lastMessage_);
+    return;
+  }
+
+  if (expectedSize_ == 0 || writtenSize_ != expectedSize_) {
+    failUpload("OTA validation failed: upload incomplete.");
+    server_.send(400, "text/plain", lastMessage_);
+    stopServer(OtaUploadState::kFailed, lastMessage_);
+    return;
+  }
+
   if (!Update.end(true)) {
     char message[kMessageBufferSize] = {};
     snprintf(message,
@@ -238,20 +498,6 @@ void OtaUploadServer::handleUpdateFinished() {
   }
 
   uploadFinished_ = true;
-
-  const esp_partition_t* running = esp_ota_get_running_partition();
-  const esp_partition_t* updated = esp_ota_get_next_update_partition(running);
-  esp_app_desc_t appDescription = {};
-  if (updated != nullptr &&
-      esp_ota_get_partition_description(updated, &appDescription) == ESP_OK) {
-    snprintf(lastMessage_,
-             sizeof(lastMessage_),
-             "OTA ready: %s %s",
-             appDescription.project_name,
-             appDescription.version);
-  } else {
-    copyMessage(lastMessage_, sizeof(lastMessage_), "OTA ready; rebooting.");
-  }
 
   state_ = OtaUploadState::kSucceeded;
   server_.send(200, "text/plain", "OTA upload successful. Rebooting.");
@@ -269,7 +515,6 @@ void OtaUploadServer::handleUploadChunk() {
       return;
     }
 
-    const size_t contentLength = server_.clientContentLength();
     const esp_partition_t* updatePartition =
         esp_ota_get_next_update_partition(nullptr);
     if (updatePartition == nullptr) {
@@ -277,12 +522,13 @@ void OtaUploadServer::handleUploadChunk() {
       return;
     }
 
-    if (contentLength == 0 || contentLength > updatePartition->size) {
+    maxImageSize_ = updatePartition->size;
+    if (maxImageSize_ == 0) {
       failUpload("OTA upload rejected; image size does not fit OTA slot.");
       return;
     }
 
-    if (!Update.begin(contentLength, U_FLASH)) {
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
       char message[kMessageBufferSize] = {};
       snprintf(message,
                sizeof(message),
@@ -294,7 +540,7 @@ void OtaUploadServer::handleUploadChunk() {
 
     state_ = OtaUploadState::kUploading;
     uploadStarted_ = true;
-    expectedSize_ = contentLength;
+    expectedSize_ = 0;
     writtenSize_ = 0;
     updateWriteError_ = false;
     copyMessage(lastMessage_, sizeof(lastMessage_), "OTA upload started.");
@@ -306,10 +552,23 @@ void OtaUploadServer::handleUploadChunk() {
       return;
     }
 
+    if (upload.currentSize == 0 || writtenSize_ + upload.currentSize > maxImageSize_) {
+      failUpload("OTA upload rejected; image size does not fit OTA slot.");
+      return;
+    }
+
     const size_t written = Update.write(upload.buf, upload.currentSize);
     writtenSize_ += written;
     if (written != upload.currentSize) {
       failUpload("OTA write failed.");
+    }
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_END) {
+    expectedSize_ = upload.totalSize;
+    if (expectedSize_ == 0 || writtenSize_ != expectedSize_) {
+      failUpload("OTA validation failed: upload incomplete.");
     }
     return;
   }
