@@ -35,6 +35,10 @@ class OtaUploadServer {
    *
    * @param firmwareName Firmware product name shown in upload pages.
    * @param firmwareVersion Firmware version shown in upload pages.
+   * @param firmwareIdentityTag Null-terminated firmware product marker that
+   * must exist inside uploaded images.
+   * @param firmwareVersionTag Null-terminated firmware version marker that
+   * must exist inside uploaded images.
    */
   void begin(const char* firmwareName,
              const char* firmwareVersion,
