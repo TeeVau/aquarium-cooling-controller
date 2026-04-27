@@ -89,6 +89,20 @@ class OtaUploadServer {
    */
   OtaUploadState state() const;
 
+  /**
+   * @brief Returns a stable text label for the current OTA upload state.
+   *
+   * @return Current upload state label.
+   */
+  const char* statusLabel() const;
+
+  /**
+   * @brief Returns the latest OTA status message.
+   *
+   * @return Last OTA message string.
+   */
+  const char* lastMessage() const;
+
  private:
   static constexpr uint32_t kUploadWindowMs = 5UL * 60UL * 1000UL;
   static constexpr uint16_t kHttpPort = 80;

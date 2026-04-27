@@ -271,6 +271,7 @@ void OtaUploadServer::update(uint32_t nowMs) {
   server_.handleClient();
 
   if (state_ == OtaUploadState::kArmed &&
+      nowMs >= enabledAtMs_ &&
       nowMs - enabledAtMs_ >= kUploadWindowMs) {
     stopServer(OtaUploadState::kTimedOut, "OTA upload window timed out.");
   }
@@ -376,6 +377,14 @@ bool OtaUploadServer::active() const {
 
 OtaUploadState OtaUploadServer::state() const {
   return state_;
+}
+
+const char* OtaUploadServer::statusLabel() const {
+  return stateLabel();
+}
+
+const char* OtaUploadServer::lastMessage() const {
+  return lastMessage_;
 }
 
 void OtaUploadServer::configureRoutes() {

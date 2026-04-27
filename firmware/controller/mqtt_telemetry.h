@@ -26,6 +26,16 @@ struct SettingsTelemetrySnapshot {
 };
 
 /**
+ * @brief Operator-visible OTA maintenance window state for MQTT publication.
+ */
+struct OtaTelemetrySnapshot {
+  bool active;              ///< True when the OTA HTTP window is active.
+  const char* stateLabel;   ///< Stable OTA state label.
+  const char* lastMessage;  ///< Latest OTA status message.
+  const char* firmwareVersion;  ///< Running firmware version string.
+};
+
+/**
  * @brief Last-result summary for MQTT remote configuration commands.
  */
 struct RemoteConfigStatus {
@@ -81,6 +91,7 @@ class MqttTelemetry {
    * @param nowMs Current monotonic timestamp in milliseconds.
    * @param controlSnapshot Latest control-engine state.
    * @param settingsSnapshot Latest configurable controller settings.
+   * @param otaSnapshot Latest OTA maintenance state.
    * @param faultSnapshot Latest fan fault-monitor state.
    * @param policySnapshot Latest fault-policy state.
    * @param remoteConfigStatus Latest remote-configuration apply status.
@@ -90,6 +101,7 @@ class MqttTelemetry {
   bool publishTelemetry(uint32_t nowMs,
                         const ControlSnapshot& controlSnapshot,
                         const SettingsTelemetrySnapshot& settingsSnapshot,
+                        const OtaTelemetrySnapshot& otaSnapshot,
                         const FaultMonitorSnapshot& faultSnapshot,
                         const FaultPolicySnapshot& policySnapshot,
                         const RemoteConfigStatus& remoteConfigStatus,

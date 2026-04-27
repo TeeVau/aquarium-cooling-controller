@@ -70,6 +70,7 @@ Implemented and broker-verified:
 - broker-side fault telemetry for air sensor, water sensor, and fan-fault cases
 - validated MQTT remote configuration for target temperature, air-assist enable,
   and minimum air-assist PWM
+- OTA maintenance-window activation and cancellation over MQTT
 - manually enabled BIN-only OTA upload with live bench validation on a bare ESP32
 
 Still intentionally open:
@@ -361,6 +362,10 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/status/fault_response` | local fault response |
 | `/status/cooling_degraded` | whether cooling effectiveness is degraded |
 | `/status/service_required` | whether service/operator action is required |
+| `/status/firmware_version` | running firmware version |
+| `/status/ota_state` | current OTA upload state |
+| `/status/ota_message` | latest OTA status message |
+| `/status/ota_window_active` | whether the OTA HTTP upload window is active |
 | `/status/remote_config_last_result` | `accepted`, `rejected`, or `none` |
 | `/status/remote_config_last_key` | key name of the last remote config command |
 | `/status/remote_config_last_detail` | short apply/reject detail for the last remote config command |
@@ -373,6 +378,7 @@ The firmware now also subscribes to these validated remote `/set/...` topics:
 | `/set/target_temp_c` | target temperature in Celsius |
 | `/set/air_assist_enable` | `true`/`false` or `1`/`0` |
 | `/set/air_min_pwm_percent` | integer minimum PWM percent in the safe `0..45` range |
+| `/set/ota_enable` | `true`/`false` or `1`/`0`; `true` opens the OTA window and `false` cancels it |
 
 Temperature rounding happens only at output boundaries. Internal sensor samples,
 control inputs, and PWM calculations keep full floating-point precision.
@@ -389,8 +395,8 @@ integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 The FHEM definition creates readings for the published state, diagnostics,
 fault-policy values, MQTT availability, and remote-config feedback topics. It
 also exposes a `setList` for the validated target temperature, air-assist
-enable flag, and minimum air-assist PWM. Local cooling on the ESP32 remains
-authoritative.
+enable flag, minimum air-assist PWM, and OTA maintenance-window control. Local
+cooling on the ESP32 remains authoritative.
 
 The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.
 If your firmware uses the committed default root `aquarium/cooling`, replace

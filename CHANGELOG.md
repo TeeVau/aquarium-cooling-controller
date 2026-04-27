@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added MQTT control of the temporary OTA maintenance window and published OTA
+  state/message topics plus the running firmware version for FHEM and
+  broker-side observability.
 - Updated the OTA specification to use a manual BIN-only ESP32 upload
   maintenance mode without ZIP archives, manifests, external update polling,
   passwords, or tokens.

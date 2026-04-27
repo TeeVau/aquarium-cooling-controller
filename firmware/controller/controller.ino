@@ -87,6 +87,7 @@ constexpr char kKeyAirAssistMinimumPwm[] = "air_min_pwm";
 constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
 constexpr char kSetAirAssistEnableSuffix[] = "/set/air_assist_enable";
 constexpr char kSetAirAssistMinimumPwmSuffix[] = "/set/air_min_pwm_percent";
+constexpr char kSetOtaEnableSuffix[] = "/set/ota_enable";
 constexpr size_t kRemoteConfigPayloadBufferSize = 32;
 
 constexpr uint8_t kWaterSensorRomCode[8] = {
@@ -130,6 +131,12 @@ FaultPolicySnapshot lastFaultPolicySnapshot = {};
 SettingsTelemetrySnapshot settingsTelemetrySnapshot = {
     kDefaultControlConfig.airAssistEnabled,
     kDefaultControlConfig.airAssistMinimumPwmPercent,
+};
+OtaTelemetrySnapshot otaTelemetrySnapshot = {
+    false,
+    "disabled",
+    "OTA upload disabled.",
+    kFirmwareVersion,
 };
 RemoteConfigStatus remoteConfigStatus = {};
 uint32_t lastDiagnosticsMs = 0;
@@ -219,6 +226,12 @@ void syncSettingsTelemetrySnapshot() {
   settingsTelemetrySnapshot.airAssistEnabled = runtimeControlConfig.airAssistEnabled;
   settingsTelemetrySnapshot.airAssistMinimumPwmPercent =
       runtimeControlConfig.airAssistMinimumPwmPercent;
+}
+
+void syncOtaTelemetrySnapshot() {
+  otaTelemetrySnapshot.active = otaUploadServer.active();
+  otaTelemetrySnapshot.stateLabel = otaUploadServer.statusLabel();
+  otaTelemetrySnapshot.lastMessage = otaUploadServer.lastMessage();
 }
 
 void requestTelemetryPublish() {
@@ -817,6 +830,39 @@ void handleRemoteConfigMessage(const char* suffix,
     Serial.print("Remote air-assist minimum PWM set to ");
     Serial.print(runtimeControlConfig.airAssistMinimumPwmPercent);
     Serial.println("%.");
+    return;
+  }
+
+  if (strcmp(suffix, kSetOtaEnableSuffix) == 0) {
+    bool enableRequested = false;
+    if (!parseBoolPayload(payloadText, &enableRequested)) {
+      setRemoteConfigStatus(false, "ota_enable", "expected true/false or 1/0");
+      Serial.print("Remote OTA control rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    if (enableRequested) {
+      const bool alreadyActive = otaUploadServer.active();
+      if (!otaUploadServer.enable(millis(), Serial)) {
+        syncOtaTelemetrySnapshot();
+        setRemoteConfigStatus(false, "ota_enable", otaUploadServer.lastMessage());
+        return;
+      }
+
+      syncOtaTelemetrySnapshot();
+      setRemoteConfigStatus(true,
+                            "ota_enable",
+                            alreadyActive ? "already active" : "ota window active");
+      Serial.println(alreadyActive ? "Remote OTA window already active."
+                                   : "Remote OTA window enabled.");
+      return;
+    }
+
+    otaUploadServer.cancel(Serial);
+    syncOtaTelemetrySnapshot();
+    setRemoteConfigStatus(true, "ota_enable", "ota window cancelled");
+    Serial.println("Remote OTA window cancelled.");
   }
 }
 
@@ -885,6 +931,7 @@ void handleSerialCommand(const char* command) {
       const bool published = mqttTelemetry.publishTelemetry(millis(),
                                                             lastControlSnapshot,
                                                             settingsTelemetrySnapshot,
+                                                            otaTelemetrySnapshot,
                                                             lastFaultSnapshot,
                                                             lastFaultPolicySnapshot,
                                                             remoteConfigStatus,
@@ -1030,6 +1077,7 @@ void setup() {
   mqttTelemetry.begin(millis());
   otaUploadServer.begin(
       kFirmwareName, kFirmwareVersion, kFirmwareIdentityTag, kFirmwareVersionTag);
+  syncOtaTelemetrySnapshot();
   mqttTelemetry.printStatus(Serial);
   printHelp();
 }
@@ -1057,11 +1105,13 @@ void loop() {
   rpmMonitor.update(nowMs);
   mqttTelemetry.update(nowMs);
   otaUploadServer.update(nowMs);
+  syncOtaTelemetrySnapshot();
 
   if (telemetryPublishRequested && lastFaultSnapshotValid) {
     const bool published = mqttTelemetry.publishTelemetry(nowMs,
                                                           lastControlSnapshot,
                                                           settingsTelemetrySnapshot,
+                                                          otaTelemetrySnapshot,
                                                           lastFaultSnapshot,
                                                           lastFaultPolicySnapshot,
                                                           remoteConfigStatus,
@@ -1089,6 +1139,7 @@ void loop() {
   mqttTelemetry.publishTelemetry(nowMs,
                                  lastControlSnapshot,
                                  settingsTelemetrySnapshot,
+                                 otaTelemetrySnapshot,
                                  lastFaultSnapshot,
                                  lastFaultPolicySnapshot,
                                  remoteConfigStatus,
