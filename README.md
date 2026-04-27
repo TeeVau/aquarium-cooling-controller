@@ -1,14 +1,30 @@
 # Aquarium Cooling Controller
 
-![Status](https://img.shields.io/badge/status-bench--verified-brightgreen)
-![Platform](https://img.shields.io/badge/platform-ESP32-blue)
-![Firmware](https://img.shields.io/badge/firmware-Arduino-green)
-![Control](https://img.shields.io/badge/control-local-important)
+[![Status](https://img.shields.io/badge/status-bench--verified-brightgreen)](https://github.com/TeeVau/aquarium-cooling-controller)
+[![Platform](https://img.shields.io/badge/platform-ESP32-blue)](https://github.com/TeeVau/aquarium-cooling-controller)
+[![Firmware](https://img.shields.io/badge/firmware-Arduino-green)](https://github.com/TeeVau/aquarium-cooling-controller/tree/main/firmware)
+[![Control](https://img.shields.io/badge/control-local-important)](https://github.com/TeeVau/aquarium-cooling-controller)
+[![Release](https://img.shields.io/github/v/release/TeeVau/aquarium-cooling-controller)](https://github.com/TeeVau/aquarium-cooling-controller/releases)
+[![License](https://img.shields.io/github/license/TeeVau/aquarium-cooling-controller)](https://github.com/TeeVau/aquarium-cooling-controller/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f)](https://teevau.github.io/aquarium-cooling-controller/)
+[![Pages Workflow](https://img.shields.io/github/actions/workflow/status/TeeVau/aquarium-cooling-controller/doxygen-pages.yml?branch=main&label=pages)](https://github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml)
 
 ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and broker-verified MQTT telemetry.
 
+![Aquarium Cooling Controller hero preview](docs/assets/github-social-preview.png)
+
+## Quick Start
+
+1. Read the [functional specification](docs/aquarium-cooling-controller-fsd.md) for system goals and constraints.
+2. Open [firmware/controller/controller.ino](firmware/controller/controller.ino) in Arduino IDE 2.x or compile it with `arduino-cli`.
+3. Install `OneWire`, `DallasTemperature`, and `PubSubClient`.
+4. Flash the controller and verify the serial `status` output at `115200` baud.
+5. For release artifacts, release notes, and tagged versions, use the [GitHub Releases page](https://github.com/TeeVau/aquarium-cooling-controller/releases).
+6. For source-level firmware documentation, open the [GitHub Pages API docs](https://teevau.github.io/aquarium-cooling-controller/).
+
 ## Table of Contents
 
+- [Quick Start](#quick-start)
 - [Overview](#overview)
 - [Current Status](#current-status)
 - [Features](#features)
@@ -522,4 +538,8 @@ See [LICENSE](LICENSE) for the full license text.
 ## Project Links
 
 - Repository: [github.com/TeeVau/aquarium-cooling-controller](https://github.com/TeeVau/aquarium-cooling-controller)
+- Releases: [github.com/TeeVau/aquarium-cooling-controller/releases](https://github.com/TeeVau/aquarium-cooling-controller/releases)
+- API documentation: [teevau.github.io/aquarium-cooling-controller](https://teevau.github.io/aquarium-cooling-controller/)
+- Pages workflow: [github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml](https://github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml)
+- Social preview asset: [docs/assets/github-social-preview.png](docs/assets/github-social-preview.png)
 - Functional specification: [docs/aquarium-cooling-controller-fsd.md](docs/aquarium-cooling-controller-fsd.md)
