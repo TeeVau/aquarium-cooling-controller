@@ -12,6 +12,7 @@ surface for:
 - target temperature
 - air-assist enable/disable
 - minimum air-assist PWM
+- OTA maintenance-window enable/cancel
 
 Local cooling on the ESP32 remains authoritative. FHEM is allowed to adjust
 only these non-critical persisted settings.
@@ -71,6 +72,10 @@ Expected readings include:
 - `remote_config_last_detail`
 - `remote_config_accept_count`
 - `remote_config_reject_count`
+- `firmware_version`
+- `ota_state`
+- `ota_message`
+- `ota_window_active`
 - `availability`
 
 Displayed temperature readings now arrive from the firmware already rounded to

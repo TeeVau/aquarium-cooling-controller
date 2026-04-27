@@ -17,6 +17,7 @@ constexpr size_t kPayloadBufferSize = 32;
 constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
 constexpr char kSetAirAssistEnableSuffix[] = "/set/air_assist_enable";
 constexpr char kSetAirAssistMinimumPwmSuffix[] = "/set/air_min_pwm_percent";
+constexpr char kSetOtaEnableSuffix[] = "/set/ota_enable";
 
 MqttTelemetry* gActiveMqttTelemetry = nullptr;
 
@@ -96,6 +97,7 @@ void MqttTelemetry::update(uint32_t nowMs) {
 bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                                      const ControlSnapshot& controlSnapshot,
                                      const SettingsTelemetrySnapshot& settingsSnapshot,
+                                     const OtaTelemetrySnapshot& otaSnapshot,
                                      const FaultMonitorSnapshot& faultSnapshot,
                                      const FaultPolicySnapshot& policySnapshot,
                                      const RemoteConfigStatus& remoteConfigStatus,
@@ -154,6 +156,10 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
   ok &= publishText("/status/fault_response",
                     FaultPolicy::responseLabel(policySnapshot.response),
                     true);
+  ok &= publishText("/status/firmware_version", otaSnapshot.firmwareVersion, true);
+  ok &= publishText("/status/ota_state", otaSnapshot.stateLabel, true);
+  ok &= publishText("/status/ota_message", otaSnapshot.lastMessage, true);
+  ok &= publishBool("/status/ota_window_active", otaSnapshot.active, true);
   ok &= publishText("/status/remote_config_last_result",
                     remoteConfigStatus.lastCommandSeen
                         ? (remoteConfigStatus.lastCommandAccepted ? "accepted" : "rejected")
@@ -322,6 +328,11 @@ bool MqttTelemetry::subscribeRemoteConfigTopics() {
     return false;
   }
 
+  if (!buildTopic(kSetOtaEnableSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -403,6 +414,15 @@ void MqttTelemetry::handleMqttMessage(char* topic,
   if (buildTopic(kSetAirAssistMinimumPwmSuffix, expectedTopic, sizeof(expectedTopic)) &&
       strcmp(topic, expectedTopic) == 0) {
     remoteConfigCallback_(kSetAirAssistMinimumPwmSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetOtaEnableSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetOtaEnableSuffix,
                           payload,
                           (size_t)length,
                           remoteConfigContext_);

@@ -568,6 +568,10 @@ configuration file.
 | `aquarium/cooling/status/alarm_code` | publish | Fault summary |
 | `aquarium/cooling/status/fault_severity` | publish | Fault severity |
 | `aquarium/cooling/status/fault_response` | publish | Local fault response |
+| `aquarium/cooling/status/firmware_version` | publish | Running firmware version |
+| `aquarium/cooling/status/ota_state` | publish | Current OTA upload state |
+| `aquarium/cooling/status/ota_message` | publish | Latest OTA status message |
+| `aquarium/cooling/status/ota_window_active` | publish | Whether the OTA upload window is currently active |
 | `aquarium/cooling/status/remote_config_last_result` | publish | Last remote-config apply result |
 | `aquarium/cooling/status/remote_config_last_key` | publish | Key name of the last remote-config command |
 | `aquarium/cooling/status/remote_config_last_detail` | publish | Last remote-config apply/reject detail |
@@ -575,6 +579,7 @@ configuration file.
 | `aquarium/cooling/set/target_temp_c` | subscribe | Remote target temperature |
 | `aquarium/cooling/set/air_assist_enable` | subscribe | Air-assist enable flag |
 | `aquarium/cooling/set/air_min_pwm_percent` | subscribe | Minimum air-assist PWM |
+| `aquarium/cooling/set/ota_enable` | subscribe | Open or cancel the temporary OTA maintenance window |
 
 #### FHEM MQTT2 Monitoring Integration
 
