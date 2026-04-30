@@ -66,7 +66,7 @@
 
 namespace {
 
-#define AQ_FIRMWARE_VERSION "0.1.2"
+#define AQ_FIRMWARE_VERSION "0.1.3"
 
 constexpr char kFirmwareName[] = "aq-cooling-controller";
 constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
