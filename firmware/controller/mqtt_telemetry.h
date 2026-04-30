@@ -18,14 +18,6 @@
 #include "fault_policy.h"
 
 /**
- * @brief Snapshot of operator-visible runtime settings that should be published.
- */
-struct SettingsTelemetrySnapshot {
-  bool airAssistEnabled;               ///< Active air-assist enable flag.
-  uint8_t airAssistMinimumPwmPercent;  ///< Active minimum PWM for air assist.
-};
-
-/**
  * @brief Operator-visible OTA maintenance window state for MQTT publication.
  */
 struct OtaTelemetrySnapshot {
@@ -90,7 +82,6 @@ class MqttTelemetry {
    *
    * @param nowMs Current monotonic timestamp in milliseconds.
    * @param controlSnapshot Latest control-engine state.
-   * @param settingsSnapshot Latest configurable controller settings.
    * @param otaSnapshot Latest OTA maintenance state.
    * @param faultSnapshot Latest fan fault-monitor state.
    * @param policySnapshot Latest fault-policy state.
@@ -100,7 +91,6 @@ class MqttTelemetry {
    */
   bool publishTelemetry(uint32_t nowMs,
                         const ControlSnapshot& controlSnapshot,
-                        const SettingsTelemetrySnapshot& settingsSnapshot,
                         const OtaTelemetrySnapshot& otaSnapshot,
                         const FaultMonitorSnapshot& faultSnapshot,
                         const FaultPolicySnapshot& policySnapshot,

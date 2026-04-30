@@ -10,8 +10,6 @@ fault-policy readings, and it subscribes to a small validated `/set/...`
 surface for:
 
 - target temperature
-- air-assist enable/disable
-- minimum air-assist PWM
 - OTA maintenance-window enable/cancel
 
 Local cooling on the ESP32 remains authoritative. FHEM is allowed to adjust
@@ -49,8 +47,6 @@ Expected readings include:
 - `water_temp_c`
 - `air_temp_c`
 - `target_temp_c`
-- `air_assist_enable`
-- `air_min_pwm_percent`
 - `fan_pwm_percent`
 - `fan_rpm`
 - `controller_mode`

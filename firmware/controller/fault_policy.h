@@ -53,7 +53,7 @@ enum class FaultSeverity : uint8_t {
  */
 enum class FaultResponse : uint8_t {
   kNormalControl,                  ///< Continue normal control behavior.
-  kDisableAirAssist,               ///< Ignore air-assist demand while using water control.
+  kReportAirSensorFault,           ///< Continue control unchanged while reporting the air-sensor fault.
   kWaterFallback,                  ///< Use fallback PWM because water input is invalid.
   kReportFanFault,                 ///< Continue commanding cooling but report fan fault.
   kWaterFallbackAndReportFanFault, ///< Use fallback PWM and report fan fault.
