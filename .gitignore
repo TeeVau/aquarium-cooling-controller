@@ -26,6 +26,7 @@ Aquarium Test export.csv
 Aquarium Test export no air assist.csv
 Codex Arduino CLI Build Stabilisierung - Heartbeat, Logging und Sandbox-Pfade.json
 build.ps1
+!tools/build.ps1
 
 # Local secrets
 firmware/controller/network_config.local.h

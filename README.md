@@ -265,13 +265,26 @@ Observed in the latest verified bench run:
 
 ### Arduino CLI
 
-Compile the controller:
+Build the controller with the repository script:
 
 ```powershell
-& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' compile --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' --output-dir 'build' 'firmware/controller'
+powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
 ```
 
-Upload the controller:
+The script keeps compile logs and raw Arduino output under the board-specific
+FQBN directory in `.arduino-build/`, copies a versioned firmware BIN to `bin/`,
+and removes the per-run log files again after a successful build.
+
+Fallback troubleshooting command if you need to call `arduino-cli` directly:
+
+```powershell
+& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' compile --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' --output-dir '.arduino-build\esp32_esp32_esp32\output' 'firmware/controller'
+```
+
+Direct `arduino-cli` calls may still hit Windows `Arduino15` or Codex sandbox
+permission issues, so prefer `tools/build.ps1` for normal work.
+
+Upload the controller after a successful build:
 
 ```powershell
 & 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' upload -p COM3 --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' 'firmware/controller'
@@ -291,9 +304,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -Brok
 
 Build artifact layout used in this repository:
 
-- `.arduino-build/esp32_esp32_esp32/`: canonical working build path used by the documented `arduino-cli` compile and upload commands
-- `build/`: exported firmware binaries plus local bench logs and serial captures
-- `firmware/controller/build/`: sketch-local Arduino tooling artifact directory created when Arduino tooling uses a sketch-local build path; it often contains duplicated binaries and `build.options.json`, is ignored by Git, and is safe to delete
+- `.arduino-build/esp32_esp32_esp32/`: canonical working build path for this FQBN, including the compile work directory plus `logs/` and `output/`; success runs clean up their temporary per-run logs again
+- `build/`: local serial captures and other bench-side ad-hoc outputs
+- `bin/`: versioned firmware release binaries created by `tools/build.ps1`
+- `firmware/controller/build/`: sketch-local Arduino tooling artifact directory created by the ESP32 core; `tools/build.ps1` deletes it again after a successful build
 
 ## Usage
 
@@ -434,7 +448,7 @@ Example:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode pub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/set/ota_enable' -Message 'true'
 powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/status/ota_upload_url' -Count 1
-curl.exe -s -S -i -F firmware=@build\controller.ino.bin http://<published-ip>/update
+curl.exe -s -S -i -F firmware=@bin\aq-cooling-controller-0.1.4.bin http://<published-ip>/update
 ```
 
 The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.
@@ -535,6 +549,8 @@ Useful artifacts:
 - Re-check the selected COM port.
 - Close any open serial monitor that still holds the port.
 - Verify Arduino IDE and `arduino-cli` are using the same ESP32 core installation.
+- If a direct `arduino-cli` command fails inside Codex with `Arduino15` access
+  errors, rerun the repository `tools/build.ps1` instead of compiling manually.
 
 ## Roadmap
 
