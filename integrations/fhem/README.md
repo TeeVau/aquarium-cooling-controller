@@ -69,9 +69,11 @@ Expected readings include:
 - `remote_config_accept_count`
 - `remote_config_reject_count`
 - `firmware_version`
+- `network_ip`
 - `ota_state`
 - `ota_message`
 - `ota_window_active`
+- `ota_upload_url`
 - `availability`
 
 Displayed temperature readings now arrive from the firmware already rounded to

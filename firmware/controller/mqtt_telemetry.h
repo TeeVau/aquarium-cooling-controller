@@ -25,6 +25,8 @@ struct OtaTelemetrySnapshot {
   const char* stateLabel;   ///< Stable OTA state label.
   const char* lastMessage;  ///< Latest OTA status message.
   const char* firmwareVersion;  ///< Running firmware version string.
+  const char* networkIp;    ///< Current Wi-Fi station IP or "unavailable".
+  const char* uploadUrl;    ///< Active OTA upload URL or "unavailable".
 };
 
 /**

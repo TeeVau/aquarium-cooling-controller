@@ -6,8 +6,8 @@
     "platform": "ESP32",
     "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
-    "secondary_goal": "Use low fan speed to remove hot air from the covered aquarium when the air under the lid heats up due to the LED lighting",
-    "project_status": "bench-verified local control firmware with water control, air-assist, target persistence, local fault policy, broker-verified MQTT telemetry, validated MQTT remote configuration for selected settings, bench-verified BIN-only OTA upload, and documented FHEM MQTT2 integration"
+    "secondary_goal": "Keep the installed controller simple, quiet, and serviceable while using MQTT and OTA only as non-critical observability and maintenance tools",
+    "project_status": "released water-only controller firmware with persisted target temperature, local fault policy, broker-verified MQTT telemetry, MQTT-triggered OTA endpoint discovery, validated BIN-only OTA upload on the fully wired controller, and documented FHEM MQTT2 integration"
   },
   "naming": {
     "repository_name": "aquarium-cooling-controller",
@@ -27,7 +27,7 @@
     "constraints": [
       "System only cools, no heating",
       "No local display or buttons are planned",
-      "MQTT may change target temperature and selected non-critical air-assist settings",
+      "MQTT may change the target temperature and the temporary OTA maintenance-window state",
       "Persisted remote settings must survive reboot and across Wi-Fi/MQTT outages",
       "Critical control must never depend on MQTT or Wi-Fi availability",
       "Low audible noise is more important than maximum cooling performance"
@@ -263,7 +263,7 @@
       "initial_recommendation": "Drive fan to a defined safe fallback PWM and raise an alarm"
     },
     "air_sensor_failure": {
-      "policy": "Continue water-based cooling control, disable air-assist, raise warning diagnostic"
+      "policy": "Continue water-based cooling control, report air-sensor fault, and keep airflow decisions dependent only on the water-driven controller state"
     },
     "fan_plausibility_failure": {
       "policy": "Treat as fan fault",
@@ -301,8 +301,6 @@
         "aquarium/cooling/state/fan_pwm_percent",
         "aquarium/cooling/state/fan_rpm",
         "aquarium/cooling/state/target_temp_c",
-        "aquarium/cooling/state/air_assist_enable",
-        "aquarium/cooling/state/air_min_pwm_percent",
         "aquarium/cooling/state/controller_mode"
       ],
       "status": [
@@ -315,6 +313,12 @@
         "aquarium/cooling/status/alarm_code",
         "aquarium/cooling/status/fault_severity",
         "aquarium/cooling/status/fault_response",
+        "aquarium/cooling/status/firmware_version",
+        "aquarium/cooling/status/network_ip",
+        "aquarium/cooling/status/ota_state",
+        "aquarium/cooling/status/ota_message",
+        "aquarium/cooling/status/ota_window_active",
+        "aquarium/cooling/status/ota_upload_url",
         "aquarium/cooling/status/remote_config_last_result",
         "aquarium/cooling/status/remote_config_last_key",
         "aquarium/cooling/status/remote_config_last_detail",
@@ -330,8 +334,7 @@
       ],
       "set": [
         "aquarium/cooling/set/target_temp_c",
-        "aquarium/cooling/set/air_assist_enable",
-        "aquarium/cooling/set/air_min_pwm_percent"
+        "aquarium/cooling/set/ota_enable"
       ]
     },
     "latest_broker_verification": {
@@ -364,7 +367,7 @@
         "Display target temperature, fan PWM, and fan RPM",
         "Display RPM plausibility diagnostics",
         "Display fault policy state and MQTT availability",
-        "Expose target temperature, air-assist enable, and minimum air-assist PWM as validated set commands"
+        "Expose target temperature and OTA maintenance-window control as validated set commands"
       ],
       "limitations": [
         "Only selected non-critical settings are writable over MQTT",
@@ -398,11 +401,10 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "BIN-only OTA upload is implemented and bench-verified on a bare ESP32 target alongside broker-verified MQTT telemetry and newly implemented validated remote configuration",
+    "current_task": "Observe and tune released firmware 0.1.4 with water-only control, broker-driven OTA endpoint discovery, and validated OTA on the installed controller hardware",
     "next_expected_tasks": [
-        "Tune water and air control behavior with live aquarium data",
-        "Verify MQTT remote configuration on the fully wired controller and in FHEM",
-        "Validate OTA on the fully wired controller hardware",
+        "Collect longer live aquarium data for the water-only strategy",
+        "Review FHEM/DB logging completeness for later analysis",
         "Finalize enclosure and wiring for the installed system"
     ],
     "instructions_for_codex": [

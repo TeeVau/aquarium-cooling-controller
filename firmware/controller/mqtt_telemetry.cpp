@@ -150,9 +150,11 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                     FaultPolicy::responseLabel(policySnapshot.response),
                     true);
   ok &= publishText("/status/firmware_version", otaSnapshot.firmwareVersion, true);
+  ok &= publishText("/status/network_ip", otaSnapshot.networkIp, true);
   ok &= publishText("/status/ota_state", otaSnapshot.stateLabel, true);
   ok &= publishText("/status/ota_message", otaSnapshot.lastMessage, true);
   ok &= publishBool("/status/ota_window_active", otaSnapshot.active, true);
+  ok &= publishText("/status/ota_upload_url", otaSnapshot.uploadUrl, true);
   ok &= publishText("/status/remote_config_last_result",
                     remoteConfigStatus.lastCommandSeen
                         ? (remoteConfigStatus.lastCommandAccepted ? "accepted" : "rejected")

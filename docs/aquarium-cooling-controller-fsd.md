@@ -285,12 +285,12 @@ Scope:
 
 Current implementation note: Wi-Fi/MQTT publish telemetry and network
 diagnostics are implemented and verified against the local MQTT broker.
-Manual BIN-only OTA upload is also implemented and bench-verified on a bare
-ESP32 target. Legacy MQTT remote configuration for target temperature and
-air-assist-related settings exist in current firmware, but the revised target
-architecture in this FSD narrows the steady-state control surface back to a
-water-driven model. The checked-in FHEM `MQTT2_DEVICE` integration shall be
-aligned to that reduced control surface as implementation proceeds.
+Manual BIN-only OTA upload is implemented and now also verified on the fully
+wired controller hardware, including MQTT-triggered OTA enable and MQTT
+publication of the active upload endpoint. The current production firmware uses
+the revised water-driven control architecture and exposes only the documented
+reduced remote-control surface. The checked-in FHEM `MQTT2_DEVICE` integration
+is aligned to that current topic set.
 
 Deliverables:
 
@@ -553,9 +553,11 @@ configuration file.
 | `aquarium/cooling/status/fault_severity` | publish | Fault severity |
 | `aquarium/cooling/status/fault_response` | publish | Local fault response |
 | `aquarium/cooling/status/firmware_version` | publish | Running firmware version |
+| `aquarium/cooling/status/network_ip` | publish | Current Wi-Fi station IP or `unavailable` |
 | `aquarium/cooling/status/ota_state` | publish | Current OTA upload state |
 | `aquarium/cooling/status/ota_message` | publish | Latest OTA status message |
 | `aquarium/cooling/status/ota_window_active` | publish | Whether the OTA upload window is currently active |
+| `aquarium/cooling/status/ota_upload_url` | publish | Active OTA upload URL or `unavailable` |
 | `aquarium/cooling/status/remote_config_last_result` | publish | Last remote-config apply result |
 | `aquarium/cooling/status/remote_config_last_key` | publish | Key name of the last remote-config command |
 | `aquarium/cooling/status/remote_config_last_detail` | publish | Last remote-config apply/reject detail |
@@ -774,7 +776,7 @@ runtime command input.
 |---|---|---|---|
 | AT-01 | Autonomous cooling without network | Run production firmware with Wi-Fi and MQTT unavailable | Cooling control remains active locally |
 | AT-02 | Persisted configuration resilience | Store target temperature, reboot, then boot without network | Target remains active and cooling still works |
-| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state, diagnostic, and status topics for the simplified control surface are published, including one-decimal temperature values and remote-config status feedback |
+| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state, diagnostic, and status topics for the simplified control surface are published, including one-decimal temperature values, OTA endpoint discovery, and remote-config status feedback |
 | AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected without overwriting the last valid persisted settings |
 | AT-05 | FHEM MQTT2 integration | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings and can issue only the documented validated set commands for the simplified control surface |
 | AT-06 | Installed water-only control | Run controller in actual aquarium installation through light and dark phases | Water remains inside the accepted operating band with materially reduced fan runtime and no air-driven overcooling |
@@ -852,7 +854,7 @@ Status interpretation in this matrix:
 | Cooling stops after water sensor issue | Fallback behavior not configured or not applied correctly | Inspect fault logs and safe fallback branch | Implement and verify defined safe fallback PWM |
 | MQTT updates seem ignored | Network unavailable or payload invalid | Check broker connection and validation logs | Restore connectivity or send valid payload |
 | FHEM readings do not update | FHEM IODev or topic root does not match the broker traffic | Compare the serial `network` root topic with the FHEM `readingList`; inspect broker traffic for `<root>/status/availability` | Correct the IODev, subscription, credentials, or root topic |
-| OTA upload page is not reachable | OTA maintenance window is not enabled, Wi-Fi is unavailable, or the window timed out | Check Wi-Fi state, OTA state, and serial/MQTT diagnostics | Enable OTA maintenance mode again or restore Wi-Fi connectivity |
+| OTA upload page is not reachable | OTA maintenance window is not enabled, Wi-Fi is unavailable, or the window timed out | Check Wi-Fi state, OTA state, serial/MQTT diagnostics, and the published `ota_upload_url` | Enable OTA maintenance mode again or restore Wi-Fi connectivity |
 | OTA update fails validation | Corrupt image, wrong firmware image, unsupported image, or image too large for the OTA slot | Inspect OTA result code and firmware release identity diagnostics | Rebuild and upload a valid firmware `.bin` image |
 | Duplicate firmware binaries appear under `firmware/controller/build/` | Arduino tooling created a sketch-local build artifact directory in addition to the repository-standard artifact folders | Inspect `build.options.json` under `firmware/controller/build/` and compare it with the documented CLI build paths | Keep `.arduino-build/` as the working build path, keep root `build/` for exported artifacts and logs, and delete the sketch-local `build/` tree when it is no longer needed |
 

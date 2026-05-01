@@ -66,17 +66,20 @@
 
 namespace {
 
-#define AQ_FIRMWARE_VERSION "0.1.3"
+#define AQ_FIRMWARE_VERSION "0.1.4"
 
 constexpr char kFirmwareName[] = "aq-cooling-controller";
 constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
 constexpr char kFirmwareIdentityTag[] = "AQFW_PRODUCT=aq-cooling-controller";
 constexpr char kFirmwareVersionTag[] = "AQFW_VERSION=" AQ_FIRMWARE_VERSION;
+constexpr char kUnavailableText[] = "unavailable";
 constexpr uint32_t kDiagnosticsIntervalMs = 2000;
 constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
 constexpr size_t kWaterSensorIndex = 0;
 constexpr size_t kAirSensorIndex = 1;
+constexpr size_t kNetworkIpBufferSize = 16;
+constexpr size_t kOtaUploadUrlBufferSize = 40;
 constexpr char kPreferencesNamespace[] = "controller";
 constexpr char kKeyHasCustomTarget[] = "target_set";
 constexpr char kKeyTargetTemperature[] = "target_c";
@@ -127,6 +130,8 @@ OtaTelemetrySnapshot otaTelemetrySnapshot = {
     "disabled",
     "OTA upload disabled.",
     kFirmwareVersion,
+    kUnavailableText,
+    kUnavailableText,
 };
 RemoteConfigStatus remoteConfigStatus = {};
 uint32_t lastDiagnosticsMs = 0;
@@ -137,6 +142,8 @@ bool lastFaultSnapshotValid = false;
 bool telemetryPublishRequested = false;
 char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
+char mqttNetworkIpBuffer[kNetworkIpBufferSize] = "unavailable";
+char mqttOtaUploadUrlBuffer[kOtaUploadUrlBufferSize] = "unavailable";
 
 void printHelp() {
   Serial.println("Serial commands:");
@@ -214,6 +221,36 @@ void syncOtaTelemetrySnapshot() {
   otaTelemetrySnapshot.active = otaUploadServer.active();
   otaTelemetrySnapshot.stateLabel = otaUploadServer.statusLabel();
   otaTelemetrySnapshot.lastMessage = otaUploadServer.lastMessage();
+  otaTelemetrySnapshot.firmwareVersion = kFirmwareVersion;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    const IPAddress wifiIp = WiFi.localIP();
+    snprintf(mqttNetworkIpBuffer,
+             sizeof(mqttNetworkIpBuffer),
+             "%u.%u.%u.%u",
+             wifiIp[0],
+             wifiIp[1],
+             wifiIp[2],
+             wifiIp[3]);
+  } else {
+    snprintf(mqttNetworkIpBuffer, sizeof(mqttNetworkIpBuffer), "%s", kUnavailableText);
+  }
+
+  otaTelemetrySnapshot.networkIp = mqttNetworkIpBuffer;
+
+  if (otaUploadServer.active() && WiFi.status() == WL_CONNECTED) {
+    snprintf(mqttOtaUploadUrlBuffer,
+             sizeof(mqttOtaUploadUrlBuffer),
+             "http://%s/update",
+             mqttNetworkIpBuffer);
+  } else {
+    snprintf(mqttOtaUploadUrlBuffer,
+             sizeof(mqttOtaUploadUrlBuffer),
+             "%s",
+             kUnavailableText);
+  }
+
+  otaTelemetrySnapshot.uploadUrl = mqttOtaUploadUrlBuffer;
 }
 
 void requestTelemetryPublish() {
