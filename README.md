@@ -185,19 +185,28 @@ Important notes:
 
 ```text
 .
-|- README.md
-|- docs/
-|  |- aquarium-cooling-controller-fsd.md
-|  |- sensor-bringup-2026-04-12.md
-|  |- design/
-|  `- result fan test/
-|- firmware/
-|  |- controller/
-|  `- fan-test/
-|- integrations/
-|  `- fhem/
-`- tools/
+├── docs/
+│   ├── aquarium-live-tests/
+│   ├── assets/
+│   ├── design/
+│   └── result fan test/
+├── firmware/
+│   ├── controller/
+│   └── fan-test/
+├── integrations/
+│   └── fhem/
+└── tools/
 ```
+
+What lives where:
+
+| Path | Purpose |
+|---|---|
+| `docs/` | specs, notes, diagrams, and test results |
+| `firmware/controller/` | main ESP32 controller firmware |
+| `firmware/fan-test/` | fan characterization sketch |
+| `integrations/fhem/` | FHEM MQTT integration |
+| `tools/` | helper scripts for local workflow |
 
 Key files:
 
@@ -479,6 +488,10 @@ Useful artifacts:
 - [docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv)
 - [docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-summary.md](docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-summary.md)
 - [docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-fhem-export.csv)
+- [docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-summary.md](docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-summary.md)
+- [docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-fhem-export.csv)
+- [docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-summary.md](docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-summary.md)
+- [docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-fhem-export.csv](docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-fhem-export.csv)
 - [integrations/fhem/README.md](integrations/fhem/README.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
