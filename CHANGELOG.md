@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-01
+
 ### Added
 
 - Added first BIN-only OTA upload implementation with a temporary ESP32-hosted
@@ -18,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added validated MQTT remote configuration for `target_temp_c`,
   `air_assist_enable`, and `air_min_pwm_percent`, including persistence and
   MQTT/diagnostic feedback for accepted and rejected commands.
+- Added retained MQTT status topics for `network_ip` and `ota_upload_url` so
+  OTA can be discovered and targeted entirely through the broker-facing
+  workflow.
 
 ### Changed
 
@@ -30,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Hardened BIN-only OTA validation to reject incomplete uploads, confirm the
   freshly booted OTA image for rollback handling, and validate uploads against
   the intended firmware identity plus a newer SemVer release.
+- Simplified steady-state control to water-only hysteresis behavior and removed
+  the active air-assist control path from the installed controller firmware.
 - Documented the repository's canonical build artifact layout:
   `.arduino-build/` for working compilation state, `build/` for exported
   binaries and bench logs, and `firmware/controller/build/` as a disposable
@@ -37,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Verified the BIN-only OTA workflow on a bare ESP32 bench target, including
   manual enable, live HTTP upload, validation failure paths, and a successful
   OTA upgrade with reboot into the new firmware.
+- Verified OTA again on the fully wired aquarium controller hardware, including
+  MQTT-triggered OTA enable, MQTT publication of the active upload endpoint,
+  and a successful HTTP BIN upload to firmware `0.1.4`.
 - Rounded displayed and published temperature values to one decimal place at
   output boundaries while keeping internal control values at full floating-point
   precision.
@@ -61,5 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Initial changelog structure and documented SemVer / Keep a Changelog release
   policy.
 
-[Unreleased]: https://github.com/TeeVau/aquarium-cooling-controller/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/TeeVau/aquarium-cooling-controller/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/TeeVau/aquarium-cooling-controller/releases/tag/v0.1.4
 [0.1.0]: https://github.com/TeeVau/aquarium-cooling-controller/releases/tag/v0.1.0

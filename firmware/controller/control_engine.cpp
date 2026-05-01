@@ -7,65 +7,12 @@
 
 #include <math.h>
 
-#include "fan_curve.h"
-
-namespace {
-
-uint8_t computeWaterBasedPwm(float waterDeltaC, const ControlConfig& config) {
-  if (waterDeltaC <= config.coolingStartDeltaC) {
-    return 0;
-  }
-
-  if (waterDeltaC >= config.fullCoolingDeltaC) {
-    return 100;
-  }
-
-  const float rampSpanC = config.fullCoolingDeltaC - config.coolingStartDeltaC;
-  const float rampPosition = (waterDeltaC - config.coolingStartDeltaC) / rampSpanC;
-  const float pwmRange = 100.0f - FanCurve::kMinimumHoldPwmPercent;
-  const float pwmValue =
-      FanCurve::kMinimumHoldPwmPercent + rampPosition * pwmRange;
-
-  return (uint8_t)roundf(constrain(pwmValue, 0.0f, 100.0f));
-}
-
-uint8_t computeAirBasedPwm(float airTemperatureC, const ControlConfig& config) {
-  if (!config.airAssistEnabled || !isfinite(airTemperatureC) ||
-      airTemperatureC < config.airAssistStartTemperatureC) {
-    return 0;
-  }
-
-  if (airTemperatureC >= config.airAssistFullTemperatureC) {
-    return config.airAssistMaximumPwmPercent;
-  }
-
-  const float assistSpanC =
-      config.airAssistFullTemperatureC - config.airAssistStartTemperatureC;
-  const float assistPosition =
-      (airTemperatureC - config.airAssistStartTemperatureC) / assistSpanC;
-  const float pwmRange =
-      (float)(config.airAssistMaximumPwmPercent - config.airAssistMinimumPwmPercent);
-  const float pwmValue =
-      config.airAssistMinimumPwmPercent + assistPosition * pwmRange;
-
-  return (uint8_t)roundf(
-      constrain(pwmValue, (float)config.airAssistMinimumPwmPercent,
-                (float)config.airAssistMaximumPwmPercent));
-}
-
-}  // namespace
-
 namespace ControlEngine {
 
 bool isTargetTemperatureValid(float targetTemperatureC, const ControlConfig& config) {
   return isfinite(targetTemperatureC) &&
          targetTemperatureC >= config.minimumTargetTemperatureC &&
          targetTemperatureC <= config.maximumTargetTemperatureC;
-}
-
-bool isAirAssistMinimumPwmValid(uint8_t minimumPwmPercent,
-                                const ControlConfig& config) {
-  return minimumPwmPercent <= config.airAssistMaximumPwmPercent;
 }
 
 float sanitizeTargetTemperature(float targetTemperatureC, const ControlConfig& config) {
@@ -92,9 +39,6 @@ ControlSnapshot compute(const ControlInputs& inputs, const ControlConfig& config
       snapshot.waterSensorValid ? inputs.waterTemperatureC : NAN;
   snapshot.airSensorValid = inputs.airSensorValid && isfinite(inputs.airTemperatureC);
   snapshot.airTemperatureC = snapshot.airSensorValid ? inputs.airTemperatureC : NAN;
-  snapshot.airBasedPwmPercent = snapshot.airSensorValid
-                                    ? computeAirBasedPwm(snapshot.airTemperatureC, config)
-                                    : 0;
 
   if (!snapshot.waterSensorValid) {
     snapshot.waterDeltaC = NAN;
@@ -105,25 +49,35 @@ ControlSnapshot compute(const ControlInputs& inputs, const ControlConfig& config
   }
 
   const float waterDeltaC = snapshot.waterTemperatureC - targetTemperatureC;
+  ControlMode mode = inputs.previousMode;
+  if (mode != ControlMode::kFanLow && mode != ControlMode::kFanOff) {
+    mode = ControlMode::kFanOff;
+  }
+
+  if (mode == ControlMode::kFanLow) {
+    if (waterDeltaC <= config.coolingOffDeltaC) {
+      mode = ControlMode::kFanOff;
+    }
+  } else if (waterDeltaC >= config.coolingOnDeltaC) {
+    mode = ControlMode::kFanLow;
+  }
+
   const uint8_t waterBasedPwmPercent =
-      computeWaterBasedPwm(waterDeltaC, config);
+      mode == ControlMode::kFanLow ? config.quietCoolingPwmPercent : 0;
 
   snapshot.waterDeltaC = waterDeltaC;
   snapshot.waterBasedPwmPercent = waterBasedPwmPercent;
-  snapshot.finalPwmPercent =
-      max(snapshot.waterBasedPwmPercent, snapshot.airBasedPwmPercent);
-  snapshot.mode = snapshot.airBasedPwmPercent > snapshot.waterBasedPwmPercent
-                      ? ControlMode::kWaterControlWithAirAssist
-                      : ControlMode::kWaterControl;
+  snapshot.finalPwmPercent = snapshot.waterBasedPwmPercent;
+  snapshot.mode = mode;
   return snapshot;
 }
 
 const char* modeLabel(ControlMode mode) {
   switch (mode) {
-    case ControlMode::kWaterControl:
-      return "water-control";
-    case ControlMode::kWaterControlWithAirAssist:
-      return "water-control+air-assist";
+    case ControlMode::kFanOff:
+      return "fan-off";
+    case ControlMode::kFanLow:
+      return "fan-low";
     case ControlMode::kWaterSensorFallback:
       return "water-sensor-fallback";
     default:

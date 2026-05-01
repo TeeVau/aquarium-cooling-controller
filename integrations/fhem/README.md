@@ -10,8 +10,6 @@ fault-policy readings, and it subscribes to a small validated `/set/...`
 surface for:
 
 - target temperature
-- air-assist enable/disable
-- minimum air-assist PWM
 - OTA maintenance-window enable/cancel
 
 Local cooling on the ESP32 remains authoritative. FHEM is allowed to adjust
@@ -49,8 +47,6 @@ Expected readings include:
 - `water_temp_c`
 - `air_temp_c`
 - `target_temp_c`
-- `air_assist_enable`
-- `air_min_pwm_percent`
 - `fan_pwm_percent`
 - `fan_rpm`
 - `controller_mode`
@@ -73,9 +69,11 @@ Expected readings include:
 - `remote_config_accept_count`
 - `remote_config_reject_count`
 - `firmware_version`
+- `network_ip`
 - `ota_state`
 - `ota_message`
 - `ota_window_active`
+- `ota_upload_url`
 - `availability`
 
 Displayed temperature readings now arrive from the firmware already rounded to

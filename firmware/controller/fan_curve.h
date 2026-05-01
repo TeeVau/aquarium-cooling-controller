@@ -35,7 +35,7 @@ namespace FanCurve {
 
 constexpr uint8_t kStartPwmPercent = 12;                ///< PWM where the fan reliably starts.
 constexpr uint8_t kMinimumHoldPwmPercent = 10;          ///< Lowest PWM used after the fan is spinning.
-constexpr uint8_t kMinimumPlausibilityPwmPercent = 10;  ///< Minimum PWM where RPM plausibility is checked.
+constexpr uint8_t kMinimumPlausibilityPwmPercent = 18;  ///< Minimum PWM where RPM plausibility is checked.
 constexpr uint8_t kPlausibilityTolerancePercent = 12;   ///< RPM tolerance around the expected curve.
 
 /**

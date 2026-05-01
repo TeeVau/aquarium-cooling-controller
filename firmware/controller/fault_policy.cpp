@@ -53,7 +53,7 @@ FaultResponse determineResponse(bool waterSensorOk, bool airSensorOk, bool fanOk
   }
 
   if (!airSensorOk) {
-    return FaultResponse::kDisableAirAssist;
+    return FaultResponse::kReportAirSensorFault;
   }
 
   return FaultResponse::kNormalControl;
@@ -137,8 +137,8 @@ const char* responseLabel(FaultResponse response) {
   switch (response) {
     case FaultResponse::kNormalControl:
       return "normal-control";
-    case FaultResponse::kDisableAirAssist:
-      return "disable-air-assist";
+    case FaultResponse::kReportAirSensorFault:
+      return "report-air-sensor-fault";
     case FaultResponse::kWaterFallback:
       return "water-fallback";
     case FaultResponse::kReportFanFault:

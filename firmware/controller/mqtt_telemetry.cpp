@@ -15,8 +15,6 @@ namespace {
 constexpr size_t kTopicBufferSize = 96;
 constexpr size_t kPayloadBufferSize = 32;
 constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
-constexpr char kSetAirAssistEnableSuffix[] = "/set/air_assist_enable";
-constexpr char kSetAirAssistMinimumPwmSuffix[] = "/set/air_min_pwm_percent";
 constexpr char kSetOtaEnableSuffix[] = "/set/ota_enable";
 
 MqttTelemetry* gActiveMqttTelemetry = nullptr;
@@ -96,7 +94,6 @@ void MqttTelemetry::update(uint32_t nowMs) {
 
 bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                                      const ControlSnapshot& controlSnapshot,
-                                     const SettingsTelemetrySnapshot& settingsSnapshot,
                                      const OtaTelemetrySnapshot& otaSnapshot,
                                      const FaultMonitorSnapshot& faultSnapshot,
                                      const FaultPolicySnapshot& policySnapshot,
@@ -121,10 +118,6 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                                   true,
                                   controlSnapshot.targetTemperatureC,
                                   true);
-  ok &= publishBool("/state/air_assist_enable", settingsSnapshot.airAssistEnabled, true);
-  ok &= publishUInt("/state/air_min_pwm_percent",
-                    settingsSnapshot.airAssistMinimumPwmPercent,
-                    true);
   ok &= publishUInt("/state/fan_pwm_percent", controlSnapshot.finalPwmPercent);
   ok &= publishUInt("/state/fan_rpm", faultSnapshot.measuredRpm);
   ok &= publishText("/state/controller_mode",
@@ -157,9 +150,11 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                     FaultPolicy::responseLabel(policySnapshot.response),
                     true);
   ok &= publishText("/status/firmware_version", otaSnapshot.firmwareVersion, true);
+  ok &= publishText("/status/network_ip", otaSnapshot.networkIp, true);
   ok &= publishText("/status/ota_state", otaSnapshot.stateLabel, true);
   ok &= publishText("/status/ota_message", otaSnapshot.lastMessage, true);
   ok &= publishBool("/status/ota_window_active", otaSnapshot.active, true);
+  ok &= publishText("/status/ota_upload_url", otaSnapshot.uploadUrl, true);
   ok &= publishText("/status/remote_config_last_result",
                     remoteConfigStatus.lastCommandSeen
                         ? (remoteConfigStatus.lastCommandAccepted ? "accepted" : "rejected")
@@ -318,16 +313,6 @@ bool MqttTelemetry::subscribeRemoteConfigTopics() {
     return false;
   }
 
-  if (!buildTopic(kSetAirAssistEnableSuffix, topic, sizeof(topic)) ||
-      !mqttClient_.subscribe(topic)) {
-    return false;
-  }
-
-  if (!buildTopic(kSetAirAssistMinimumPwmSuffix, topic, sizeof(topic)) ||
-      !mqttClient_.subscribe(topic)) {
-    return false;
-  }
-
   if (!buildTopic(kSetOtaEnableSuffix, topic, sizeof(topic)) ||
       !mqttClient_.subscribe(topic)) {
     return false;
@@ -396,24 +381,6 @@ void MqttTelemetry::handleMqttMessage(char* topic,
   if (buildTopic(kSetTargetTemperatureSuffix, expectedTopic, sizeof(expectedTopic)) &&
       strcmp(topic, expectedTopic) == 0) {
     remoteConfigCallback_(kSetTargetTemperatureSuffix,
-                          payload,
-                          (size_t)length,
-                          remoteConfigContext_);
-    return;
-  }
-
-  if (buildTopic(kSetAirAssistEnableSuffix, expectedTopic, sizeof(expectedTopic)) &&
-      strcmp(topic, expectedTopic) == 0) {
-    remoteConfigCallback_(kSetAirAssistEnableSuffix,
-                          payload,
-                          (size_t)length,
-                          remoteConfigContext_);
-    return;
-  }
-
-  if (buildTopic(kSetAirAssistMinimumPwmSuffix, expectedTopic, sizeof(expectedTopic)) &&
-      strcmp(topic, expectedTopic) == 0) {
-    remoteConfigCallback_(kSetAirAssistMinimumPwmSuffix,
                           payload,
                           (size_t)length,
                           remoteConfigContext_);

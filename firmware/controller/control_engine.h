@@ -12,24 +12,33 @@
 #include <Arduino.h>
 
 /**
- * @brief Tunable limits and ramp settings for cooling control.
+ * @brief Tunable limits and hysteresis settings for cooling control.
  *
  * The configuration describes the safe operating envelope for water-temperature
- * control and optional ambient-air assist. Temperature values are expressed in
- * degrees Celsius and PWM values use the controller-wide 0 to 100 percent scale.
+ * control. Temperature values are expressed in degrees Celsius and PWM values
+ * use the controller-wide 0 to 100 percent scale.
  */
 struct ControlConfig {
   float defaultTargetTemperatureC;     ///< Fallback target water temperature in degrees Celsius.
   float minimumTargetTemperatureC;     ///< Lowest accepted configured target in degrees Celsius.
   float maximumTargetTemperatureC;     ///< Highest accepted configured target in degrees Celsius.
   uint8_t fallbackPwmPercent;          ///< Fan PWM used when water temperature is unavailable.
-  float coolingStartDeltaC;            ///< Water delta above target where cooling begins.
-  float fullCoolingDeltaC;             ///< Water delta above target where full PWM is requested.
-  bool airAssistEnabled;               ///< Enables ambient-air assist when the air sensor is valid.
-  float airAssistStartTemperatureC;    ///< Air temperature where assist starts.
-  float airAssistFullTemperatureC;     ///< Air temperature where assist reaches its maximum PWM.
-  uint8_t airAssistMinimumPwmPercent;  ///< Minimum PWM requested by air assist.
-  uint8_t airAssistMaximumPwmPercent;  ///< Maximum PWM requested by air assist.
+  float coolingOnDeltaC;               ///< Water delta above target where quiet cooling starts.
+  float coolingOffDeltaC;              ///< Water delta below target where cooling stops.
+  uint8_t quietCoolingPwmPercent;      ///< Fixed PWM used during normal quiet cooling.
+};
+
+/**
+ * @brief Operating mode selected by the control engine.
+ *
+ * The mode explains why the final PWM command was selected. It is used in
+ * diagnostics and telemetry so users can distinguish between an idle fan
+ * state, the fixed quiet cooling stage, and the water-sensor fallback mode.
+ */
+enum class ControlMode : uint8_t {
+  kFanOff,                ///< Water-driven hysteresis currently keeps the fan off.
+  kFanLow,                ///< Water-driven hysteresis currently commands the fixed quiet PWM.
+  kWaterSensorFallback,   ///< Water sensor is invalid and fallback PWM is used.
 };
 
 /**
@@ -47,19 +56,7 @@ struct ControlInputs {
   float waterTemperatureC;             ///< Water temperature in degrees Celsius.
   bool airSensorValid;                 ///< True when the ambient air temperature sample is valid.
   float airTemperatureC;               ///< Ambient air temperature in degrees Celsius.
-};
-
-/**
- * @brief Operating mode selected by the control engine.
- *
- * The mode explains why the final PWM command was selected. It is used in
- * diagnostics and telemetry so users can distinguish normal water control,
- * air-assist overrides, and water-sensor fallback operation.
- */
-enum class ControlMode : uint8_t {
-  kWaterControl,              ///< Water sensor drives the final PWM command.
-  kWaterControlWithAirAssist, ///< Air-assist demand exceeds the water-based command.
-  kWaterSensorFallback,       ///< Water sensor is invalid and fallback PWM is used.
+  ControlMode previousMode;            ///< Previously active control mode for hysteresis hold behavior.
 };
 
 /**
@@ -77,8 +74,7 @@ struct ControlSnapshot {
   bool airSensorValid;            ///< True when the air temperature value is usable.
   float airTemperatureC;          ///< Effective air temperature, or NAN when invalid.
   float waterDeltaC;              ///< Water temperature minus target temperature.
-  uint8_t waterBasedPwmPercent;   ///< PWM requested by water-temperature control.
-  uint8_t airBasedPwmPercent;     ///< PWM requested by ambient-air assist.
+  uint8_t waterBasedPwmPercent;   ///< PWM requested by water-temperature hysteresis control.
   uint8_t finalPwmPercent;        ///< Final commanded fan PWM percentage.
   ControlMode mode;               ///< Selected control mode.
 };
@@ -91,13 +87,9 @@ constexpr ControlConfig kDefaultControlConfig = {
     15.0f,
     35.0f,
     40,
-    0.20f,
-    3.00f,
-    true,
-    26.0f,
-    30.0f,
-    20,
-    45,
+    0.5f,
+    -0.5f,
+    18,
 };
 
 namespace ControlEngine {
@@ -122,17 +114,6 @@ bool isTargetTemperatureValid(float targetTemperatureC,
                               const ControlConfig& config = kDefaultControlConfig);
 
 /**
- * @brief Checks whether a minimum air-assist PWM is inside the configured limits.
- *
- * @param minimumPwmPercent Candidate minimum air-assist PWM percentage.
- * @param config Control limits used for validation.
- * @return True when the minimum PWM can be applied safely.
- */
-bool isAirAssistMinimumPwmValid(
-    uint8_t minimumPwmPercent,
-    const ControlConfig& config = kDefaultControlConfig);
-
-/**
  * @brief Replaces invalid target temperatures with the configured default.
  *
  * @param targetTemperatureC Candidate target temperature in degrees Celsius.
@@ -145,13 +126,12 @@ float sanitizeTargetTemperature(float targetTemperatureC,
 /**
  * @brief Computes the fan command and control mode for the current inputs.
  *
- * Water temperature is the primary control variable. When air assist is enabled
- * and the air sensor is valid, the final PWM is the larger of the water-based
- * command and the air-assist command. If the water sensor is invalid, the
- * configured fallback PWM is used.
+ * Water temperature is the only closed-loop control variable. The previous
+ * control mode is used to hold the current state within the hysteresis band.
+ * If the water sensor is invalid, the configured fallback PWM is used.
  *
  * @param inputs Sensor validity, measured temperatures, and requested target.
- * @param config Control limits and ramp settings.
+ * @param config Control limits and hysteresis settings.
  * @return Snapshot containing intermediate values and the final PWM command.
  */
 ControlSnapshot compute(const ControlInputs& inputs,

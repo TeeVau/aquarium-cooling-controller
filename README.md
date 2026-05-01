@@ -53,14 +53,16 @@ The main design rule is that cooling must continue to work locally on the ESP32 
 The repository currently contains both:
 
 - a completed fan-characterization workflow for the selected Noctua fan
-- a bench-verified local controller milestone with water control, air-assist, persisted target temperature, fault policy, and MQTT telemetry
+- a released local controller firmware with water-only hysteresis control,
+  persisted target temperature, fault policy, broker-verified MQTT telemetry,
+  and validated OTA over Wi-Fi
 
 ## Current Status
 
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
-Latest released firmware: `0.1.0` (`2026-04-20`).
-Current source version on this branch: `0.1.2` (`Unreleased`).
+Latest released firmware: `0.1.4` (`2026-05-01`).
+Current source version: `0.1.4`.
 
 Implemented and bench-verified:
 
@@ -70,8 +72,7 @@ Implemented and bench-verified:
 - measured PWM-to-RPM interpolation for plausibility checks
 - shared 1-Wire bus on `GPIO33`
 - fixed ROM-ID assignment for water and air sensors
-- local water-temperature control
-- local air-assist control using `max(water_based_pwm, air_based_pwm)`
+- local water-only hysteresis control
 - target temperature persistence in ESP32 Preferences / NVS
 - strict default and fallback target temperature of `23.0 C`
 - serial diagnostics with sensor, fan, and alarm information
@@ -84,16 +85,18 @@ Implemented and broker-verified:
 - local secret override via ignored `network_config.local.h`
 - broker-side normal telemetry capture
 - broker-side fault telemetry for air sensor, water sensor, and fan-fault cases
-- validated MQTT remote configuration for target temperature, air-assist enable,
-  and minimum air-assist PWM
+- validated MQTT remote configuration for target temperature and OTA maintenance
+  mode control
 - OTA maintenance-window activation and cancellation over MQTT
-- manually enabled BIN-only OTA upload with live bench validation on a bare ESP32
+- manually enabled BIN-only OTA upload with live validation on the fully wired
+  controller hardware
+- MQTT publication of both the controller IP and the active OTA upload URL
 
 Still intentionally open:
 
-- real-aquarium tuning of water and air control behavior
+- longer real-aquarium live data capture for the water-only control strategy
 - longer real-aquarium live data capture after the first 2 h installed run
-- live broker/FHEM verification of the new MQTT remote configuration path
+- FHEM/DB logging completeness review for long-running aquarium analysis
 
 ## Features
 
@@ -102,8 +105,7 @@ Implemented now:
 - Local autonomous control on ESP32 without network dependency
 - Fan characterization sketch for the selected 4-pin PWM fan
 - Measured fan curve reused in production firmware
-- Water-temperature based control with default target `23.0 C`
-- Air-assist based on lid air temperature
+- Water-only hysteresis control with default target `23.0 C`
 - Fixed DS18B20 role mapping by ROM ID instead of bus order
 - Target temperature persistence across reboot
 - Safe fallback to `23.0 C` for invalid or missing target values
@@ -111,16 +113,16 @@ Implemented now:
 - Central fault-policy model with alarm severity and response labels
 - Hardware-verified fault responses for sensor failures and fan plausibility faults
 - Wi-Fi/MQTT telemetry that does not block local cooling
-- Validated MQTT remote configuration for selected persisted settings
+- Validated MQTT remote configuration for target temperature and OTA enable
 - Manually enabled BIN-only OTA firmware upload over Wi-Fi
+- MQTT publication of firmware version, controller IP, and active OTA upload URL
 - Serial service commands for diagnostics and bench operation
 
 Planned next:
 
-- longer aquarium-side live data capture
-- aquarium-side control tuning with recorded live operating data
-- MQTT remote parameter updates
-- OTA validation on the fully wired controller hardware
+- longer aquarium-side live data capture with the released water-only strategy
+- FHEM/DB logging completeness for long-term analysis
+- optional local temperature display
 
 ## Hardware
 
@@ -303,9 +305,7 @@ What it does today:
 
 - initializes PWM output, tach measurement, and the 1-Wire bus
 - assigns water and air sensors by fixed ROM ID
-- computes local water-based fan demand
-- computes air-assist fan demand from the air sensor
-- selects `final_pwm = max(water_based_pwm, air_based_pwm)`
+- computes local water-only hysteresis fan demand
 - persists a user-set target temperature in Preferences / NVS
 - falls back to the default target `23.0 C` if the stored or entered target is invalid
 - prints continuous diagnostics including target source, alarm code, sensor health, RPM plausibility, and assigned ROM IDs
@@ -323,10 +323,13 @@ Current serial service commands:
 | `status` | Print diagnostics immediately |
 | `target <c>` | Set and persist a custom target temperature |
 | `default` | Clear the stored target and return to `23.0 C` |
-| `airassist` | Print the current air-assist defaults |
+| `control` | Print the current hysteresis and quiet-cooling defaults |
 | `faults` | Print the current fault-policy defaults |
 | `network` | Print Wi-Fi/MQTT configuration and connection status |
 | `publish` | Publish telemetry immediately when MQTT is connected |
+| `ota status` | Print current OTA upload status |
+| `ota enable` | Open the temporary OTA upload window |
+| `ota cancel` | Close the temporary OTA upload window |
 | `help` | Show the command list |
 
 Example session:
@@ -358,8 +361,6 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/state/water_temp_c` | water temperature or `unavailable`, formatted with one decimal place |
 | `/state/air_temp_c` | air temperature or `unavailable`, formatted with one decimal place |
 | `/state/target_temp_c` | active target temperature, formatted with one decimal place |
-| `/state/air_assist_enable` | active air-assist enable flag |
-| `/state/air_min_pwm_percent` | active minimum air-assist PWM |
 | `/state/fan_pwm_percent` | final commanded fan PWM |
 | `/state/fan_rpm` | measured fan RPM |
 | `/state/controller_mode` | local control mode |
@@ -379,9 +380,11 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/status/cooling_degraded` | whether cooling effectiveness is degraded |
 | `/status/service_required` | whether service/operator action is required |
 | `/status/firmware_version` | running firmware version |
+| `/status/network_ip` | current Wi-Fi station IP or `unavailable` |
 | `/status/ota_state` | current OTA upload state |
 | `/status/ota_message` | latest OTA status message |
 | `/status/ota_window_active` | whether the OTA HTTP upload window is active |
+| `/status/ota_upload_url` | active OTA upload URL or `unavailable` |
 | `/status/remote_config_last_result` | `accepted`, `rejected`, or `none` |
 | `/status/remote_config_last_key` | key name of the last remote config command |
 | `/status/remote_config_last_detail` | short apply/reject detail for the last remote config command |
@@ -392,8 +395,6 @@ The firmware now also subscribes to these validated remote `/set/...` topics:
 | Topic suffix | Payload |
 |---|---|
 | `/set/target_temp_c` | target temperature in Celsius |
-| `/set/air_assist_enable` | `true`/`false` or `1`/`0` |
-| `/set/air_min_pwm_percent` | integer minimum PWM percent in the safe `0..45` range |
 | `/set/ota_enable` | `true`/`false` or `1`/`0`; `true` opens the OTA window and `false` cancels it |
 
 Temperature rounding happens only at output boundaries. Internal sensor samples,
@@ -410,9 +411,22 @@ integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 
 The FHEM definition creates readings for the published state, diagnostics,
 fault-policy values, MQTT availability, and remote-config feedback topics. It
-also exposes a `setList` for the validated target temperature, air-assist
-enable flag, minimum air-assist PWM, and OTA maintenance-window control. Local
-cooling on the ESP32 remains authoritative.
+also exposes a `setList` for the validated target temperature and OTA
+maintenance-window control. Local cooling on the ESP32 remains authoritative.
+
+For a broker-driven OTA workflow:
+
+1. Publish `true` to `/set/ota_enable`.
+2. Read `/status/ota_upload_url` until it reports `http://<ip>/update`.
+3. Upload the compiled firmware binary to that published URL.
+
+Example:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode pub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/set/ota_enable' -Message 'true'
+powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/status/ota_upload_url' -Count 1
+curl.exe -s -S -i -F firmware=@build\controller.ino.bin http://<published-ip>/update
+```
 
 The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.
 If your firmware uses the committed default root `aquarium/cooling`, replace
@@ -438,11 +452,10 @@ Verified controller milestone on hardware:
 - default target temperature verified at `23.0 C`
 - invalid target input falls back to `23.0 C`
 - persisted target survives reboot
-- local water control behaves plausibly
-- first air-assist behavior behaves plausibly
+- local water-only hysteresis control behaves plausibly
 - fault policy reports alarm code, severity, response, service requirement, and degraded-cooling state
 - water-sensor failure enters `water-sensor-fault`, `critical`, and `water-fallback` at `40%` PWM
-- air-sensor failure enters `air-sensor-fault`, `warning`, and `disable-air-assist`
+- air-sensor failure enters `air-sensor-fault`, `warning`, and `report-air-sensor-fault`
 - missing tach feedback enters `fan-fault`, `critical`, and `report-fan-fault`
 - slowed fan / RPM deviation outside tolerance enters `fan-fault` after the configured mismatch debounce
 - fan fault recovery returns to `none` after the configured plausible-match debounce
@@ -450,7 +463,9 @@ Verified controller milestone on hardware:
 - MQTT connects to the broker and publishes with the configured root topic
 - normal broker capture observed the expected telemetry topics for state, diagnostics, and status
 - broker telemetry reports plausible normal values such as `water-control`, target `23.0`, fan RPM, expected RPM, tolerance, and RPM error
-- air-sensor fault publishes `air-sensor-fault`, `warning`, and `disable-air-assist`
+- MQTT publishes the controller firmware version, current IP, and active OTA upload URL
+- MQTT-triggered OTA enable publishes `ota_upload_url`, and a successful BIN upload to `0.1.4` was verified on the fully wired controller
+- air-sensor fault publishes `air-sensor-fault`, `warning`, and `report-air-sensor-fault`
 - water-sensor fault publishes `water-sensor-fault`, `critical`, `water-fallback`, `cooling_degraded=true`, and fallback fan PWM
 - fan RPM deviation publishes `fan-fault`, `critical`, `report-fan-fault`, `cooling_degraded=true`, and `service_required=true`
 - broker telemetry returns to `alarm_code=none` after fault recovery
@@ -512,11 +527,11 @@ Useful artifacts:
 
 Next likely steps:
 
-1. Extend the first installed aquarium capture to longer live data for water and air control tuning.
-2. Verify the new MQTT remote parameter workflow on the fully wired controller and in the real FHEM setup.
-3. Extend OTA validation from the bare ESP32 bench target to the fully wired controller.
-4. Finalize enclosure, wiring, and installation layout for the real aquarium.
-5. Re-check fan plausibility in the final installed airflow path.
+1. Extend the first installed aquarium capture to longer live data for the released water-only control strategy.
+2. Review FHEM/DB logging completeness for long-term aquarium analysis.
+3. Finalize enclosure, wiring, and installation layout for the real aquarium.
+4. Re-check fan plausibility in the final installed airflow path.
+5. Evaluate the optional local OLED temperature display.
 
 ## Contributing
 
