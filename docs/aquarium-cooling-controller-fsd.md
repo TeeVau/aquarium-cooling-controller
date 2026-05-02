@@ -881,7 +881,7 @@ Status interpretation in this matrix:
 |---|---:|
 | Water target delta to enter cooling | +0.5 C |
 | Water target delta to leave cooling | -0.5 C |
-| Fixed quiet cooling PWM | 18 % |
+| Fixed quiet cooling PWM | 22 % |
 | Optional second stage | Out of scope for the first simplified control revision |
 
 ### C. Default Naming
