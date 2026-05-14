@@ -3,9 +3,9 @@
  * @brief Arduino sketch entry point for the aquarium cooling controller.
  *
  * The sketch wires the firmware modules together and owns the runtime loop. It
- * initializes persistent target-temperature storage, temperature sensing, fan
- * PWM output, tachometer RPM monitoring, fault evaluation, serial diagnostics,
- * and optional MQTT telemetry.
+ * initializes persistent temperature-control storage, water-temperature
+ * sensing, fan PWM output, tachometer RPM monitoring, fault evaluation, serial
+ * diagnostics, and optional MQTT telemetry.
  *
  * Runtime behavior is intentionally local-first: cooling control, fan safety
  * monitoring, and diagnostics continue on the ESP32 even when Wi-Fi, MQTT, or
@@ -14,7 +14,6 @@
  * @section controller_circuit Circuit
  *
  * - DS18B20 water probe on the shared OneWire bus.
- * - DS18B20 air probe on the same OneWire bus for diagnostics and observability.
  * - Four-wire PWM fan controlled by ESP32 LEDC output.
  * - Fan tachometer connected to an interrupt-capable ESP32 GPIO.
  *
@@ -66,7 +65,7 @@
 
 namespace {
 
-#define AQ_FIRMWARE_VERSION "0.1.5"
+#define AQ_FIRMWARE_VERSION "0.1.6"
 
 constexpr char kFirmwareName[] = "aq-cooling-controller";
 constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
@@ -77,13 +76,22 @@ constexpr uint32_t kDiagnosticsIntervalMs = 2000;
 constexpr size_t kSerialCommandBufferSize = 32;
 constexpr size_t kSensorAddressBufferSize = 17;
 constexpr size_t kWaterSensorIndex = 0;
-constexpr size_t kAirSensorIndex = 1;
 constexpr size_t kNetworkIpBufferSize = 16;
 constexpr size_t kOtaUploadUrlBufferSize = 40;
 constexpr char kPreferencesNamespace[] = "controller";
 constexpr char kKeyHasCustomTarget[] = "target_set";
 constexpr char kKeyTargetTemperature[] = "target_c";
+constexpr char kKeyCoolingOnDelta[] = "cool_on";
+constexpr char kKeyCoolingOffDelta[] = "cool_off";
+constexpr char kKeyHighCoolingDelta[] = "cool_high";
+constexpr char kKeyFanLowPwm[] = "fan_low";
+constexpr char kKeyFanHighPwm[] = "fan_high";
 constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
+constexpr char kSetCoolingOnDeltaSuffix[] = "/set/cooling_on_delta_c";
+constexpr char kSetCoolingOffDeltaSuffix[] = "/set/cooling_off_delta_c";
+constexpr char kSetHighCoolingDeltaSuffix[] = "/set/high_cooling_delta_c";
+constexpr char kSetFanLowPwmSuffix[] = "/set/fan_low_pwm_percent";
+constexpr char kSetFanHighPwmSuffix[] = "/set/fan_high_pwm_percent";
 constexpr char kSetOtaEnableSuffix[] = "/set/ota_enable";
 constexpr size_t kRemoteConfigPayloadBufferSize = 32;
 
@@ -91,25 +99,16 @@ constexpr uint8_t kWaterSensorRomCode[8] = {
     0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB,
 };
 
-constexpr uint8_t kAirSensorRomCode[8] = {
-    0x28, 0x24, 0x46, 0x44, 0x05, 0x00, 0x00, 0xDA,
-};
-
 constexpr SensorManagerConfig kSensorManagerConfig = {
     33,
     2000,
     12,
-    2,
+    1,
     {
         {
             true,
             {0x28, 0x33, 0x38, 0x44, 0x05, 0x00, 0x00, 0xCB},
             "Water sensor",
-        },
-        {
-            true,
-            {0x28, 0x24, 0x46, 0x44, 0x05, 0x00, 0x00, 0xDA},
-            "Air sensor",
         },
     },
 };
@@ -287,6 +286,18 @@ void clearPersistedTargetTemperature() {
   preferences.remove(kKeyTargetTemperature);
 }
 
+void clearPersistedControlConfig() {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.remove(kKeyCoolingOnDelta);
+  preferences.remove(kKeyCoolingOffDelta);
+  preferences.remove(kKeyHighCoolingDelta);
+  preferences.remove(kKeyFanLowPwm);
+  preferences.remove(kKeyFanHighPwm);
+}
+
 void persistTargetTemperature(float targetTemperatureC) {
   if (!preferencesReady) {
     return;
@@ -294,6 +305,79 @@ void persistTargetTemperature(float targetTemperatureC) {
 
   preferences.putBool(kKeyHasCustomTarget, true);
   preferences.putFloat(kKeyTargetTemperature, targetTemperatureC);
+}
+
+void persistControlConfig(const ControlConfig& config) {
+  if (!preferencesReady) {
+    return;
+  }
+
+  preferences.putFloat(kKeyCoolingOnDelta, config.coolingOnDeltaC);
+  preferences.putFloat(kKeyCoolingOffDelta, config.coolingOffDeltaC);
+  preferences.putFloat(kKeyHighCoolingDelta, config.highCoolingDeltaC);
+  preferences.putUChar(kKeyFanLowPwm, config.fanLowPwmPercent);
+  preferences.putUChar(kKeyFanHighPwm, config.fanHighPwmPercent);
+}
+
+const char* validateControlConfigDetail(const ControlConfig& config) {
+  if (!isfinite(config.coolingOnDeltaC) ||
+      config.coolingOnDeltaC < config.minimumCoolingOnDeltaC ||
+      config.coolingOnDeltaC > config.maximumCoolingOnDeltaC ||
+      config.coolingOnDeltaC <= 0.0f) {
+    return "cooling_on_delta_c out of allowed range";
+  }
+
+  if (!isfinite(config.coolingOffDeltaC) ||
+      config.coolingOffDeltaC < config.minimumCoolingOffDeltaC ||
+      config.coolingOffDeltaC > config.maximumCoolingOffDeltaC ||
+      config.coolingOffDeltaC >= 0.0f) {
+    return "cooling_off_delta_c out of allowed range";
+  }
+
+  if (!isfinite(config.highCoolingDeltaC) ||
+      config.highCoolingDeltaC < config.minimumHighCoolingDeltaC ||
+      config.highCoolingDeltaC > config.maximumHighCoolingDeltaC) {
+    return "high_cooling_delta_c out of allowed range";
+  }
+
+  if (config.highCoolingDeltaC <= config.coolingOnDeltaC ||
+      (config.highCoolingDeltaC - config.coolingOnDeltaC) < 0.1f) {
+    return "high_cooling_delta_c must exceed cooling_on_delta_c";
+  }
+
+  if (config.fanLowPwmPercent < config.minimumFanLowPwmPercent ||
+      config.fanLowPwmPercent > config.maximumFanLowPwmPercent) {
+    return "fan_low_pwm_percent out of allowed range";
+  }
+
+  if (config.fanHighPwmPercent < config.minimumFanHighPwmPercent ||
+      config.fanHighPwmPercent > config.maximumFanHighPwmPercent) {
+    return "fan_high_pwm_percent out of allowed range";
+  }
+
+  if (config.fanHighPwmPercent <= config.fanLowPwmPercent) {
+    return "fan_high_pwm_percent must exceed fan_low_pwm_percent";
+  }
+
+  return nullptr;
+}
+
+bool applyRuntimeControlConfig(const ControlConfig& candidate, const char** detailOut) {
+  if (!ControlEngine::isControlConfigValid(candidate)) {
+    if (detailOut != nullptr) {
+      *detailOut = validateControlConfigDetail(candidate);
+    }
+    return false;
+  }
+
+  runtimeControlConfig = candidate;
+  persistControlConfig(runtimeControlConfig);
+  requestTelemetryPublish();
+
+  if (detailOut != nullptr) {
+    *detailOut = "persisted";
+  }
+  return true;
 }
 
 void loadPersistedTargetTemperature() {
@@ -323,6 +407,29 @@ void loadPersistedTargetTemperature() {
 
 void initializeRuntimeControlConfig() {
   runtimeControlConfig = kDefaultControlConfig;
+
+  if (!preferencesReady) {
+    return;
+  }
+
+  ControlConfig candidate = runtimeControlConfig;
+  candidate.coolingOnDeltaC =
+      preferences.getFloat(kKeyCoolingOnDelta, kDefaultControlConfig.coolingOnDeltaC);
+  candidate.coolingOffDeltaC =
+      preferences.getFloat(kKeyCoolingOffDelta, kDefaultControlConfig.coolingOffDeltaC);
+  candidate.highCoolingDeltaC =
+      preferences.getFloat(kKeyHighCoolingDelta, kDefaultControlConfig.highCoolingDeltaC);
+  candidate.fanLowPwmPercent =
+      preferences.getUChar(kKeyFanLowPwm, kDefaultControlConfig.fanLowPwmPercent);
+  candidate.fanHighPwmPercent =
+      preferences.getUChar(kKeyFanHighPwm, kDefaultControlConfig.fanHighPwmPercent);
+
+  if (!ControlEngine::isControlConfigValid(candidate)) {
+    clearPersistedControlConfig();
+    return;
+  }
+
+  runtimeControlConfig = candidate;
 }
 
 void printTemperatureLine(const char* label, float value) {
@@ -446,12 +553,20 @@ void printControlDetails() {
   DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOnDeltaC);
   Serial.println(" C");
 
+  Serial.print("  Cooling enters fan-high at target delta: +");
+  DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.highCoolingDeltaC);
+  Serial.println(" C");
+
   Serial.print("  Cooling leaves at target delta: ");
   DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOffDeltaC);
   Serial.println(" C");
 
-  Serial.print("  Quiet cooling PWM: ");
-  Serial.print(runtimeControlConfig.quietCoolingPwmPercent);
+  Serial.print("  Fan-low PWM: ");
+  Serial.print(runtimeControlConfig.fanLowPwmPercent);
+  Serial.println("%");
+
+  Serial.print("  Fan-high PWM: ");
+  Serial.print(runtimeControlConfig.fanHighPwmPercent);
   Serial.println("%");
 
   Serial.print("  Final target PWM: ");
@@ -466,9 +581,6 @@ void printFaultPolicyDefaults() {
   Serial.print(" at ");
   Serial.print(kDefaultControlConfig.fallbackPwmPercent);
   Serial.println("% PWM");
-
-  Serial.print("  Air sensor fault response: ");
-  Serial.println(FaultPolicy::responseLabel(FaultResponse::kReportAirSensorFault));
 
   Serial.print("  Fan fault response: ");
   Serial.println(FaultPolicy::responseLabel(FaultResponse::kReportFanFault));
@@ -588,9 +700,6 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.print("  Water sensor ok: ");
   Serial.println(policySnapshot.waterSensorOk ? "yes" : "no");
 
-  Serial.print("  Air sensor ok: ");
-  Serial.println(policySnapshot.airSensorOk ? "yes" : "no");
-
   Serial.print("  Fan ok: ");
   Serial.println(policySnapshot.fanOk ? "yes" : "no");
 
@@ -640,6 +749,23 @@ bool setTargetTemperature(float targetTemperatureC) {
   return true;
 }
 
+bool updateControlConfigFloat(float value,
+                              float ControlConfig::*member,
+                              const char** detailOut) {
+  (void)detailOut;
+  ControlConfig candidate = runtimeControlConfig;
+  candidate.*member = value;
+  return applyRuntimeControlConfig(candidate, detailOut);
+}
+
+bool updateControlConfigPwm(uint8_t value,
+                            uint8_t ControlConfig::*member,
+                            const char** detailOut) {
+  ControlConfig candidate = runtimeControlConfig;
+  candidate.*member = value;
+  return applyRuntimeControlConfig(candidate, detailOut);
+}
+
 bool copyRemoteConfigPayload(const uint8_t* payload,
                              size_t length,
                              char* buffer,
@@ -673,6 +799,36 @@ bool parseBoolPayload(const char* text, bool* value) {
   return false;
 }
 
+bool parseFloatPayload(const char* text, float* value) {
+  if (text == nullptr || value == nullptr) {
+    return false;
+  }
+
+  char* endPtr = nullptr;
+  const float parsedValue = strtof(text, &endPtr);
+  if (endPtr == nullptr || *endPtr != '\0' || !isfinite(parsedValue)) {
+    return false;
+  }
+
+  *value = parsedValue;
+  return true;
+}
+
+bool parseUInt8Payload(const char* text, uint8_t* value) {
+  if (text == nullptr || value == nullptr || text[0] == '\0') {
+    return false;
+  }
+
+  char* endPtr = nullptr;
+  const unsigned long parsedValue = strtoul(text, &endPtr, 10);
+  if (endPtr == nullptr || *endPtr != '\0' || parsedValue > 255UL) {
+    return false;
+  }
+
+  *value = static_cast<uint8_t>(parsedValue);
+  return true;
+}
+
 void handleRemoteConfigMessage(const char* suffix,
                                const uint8_t* payload,
                                size_t length,
@@ -689,9 +845,9 @@ void handleRemoteConfigMessage(const char* suffix,
   }
 
   if (strcmp(suffix, kSetTargetTemperatureSuffix) == 0) {
-    char* endPtr = nullptr;
-    const float parsedTargetTemperatureC = strtof(payloadText, &endPtr);
-    if (*endPtr != '\0' || !setTargetTemperature(parsedTargetTemperatureC)) {
+    float parsedTargetTemperatureC = NAN;
+    if (!parseFloatPayload(payloadText, &parsedTargetTemperatureC) ||
+        !setTargetTemperature(parsedTargetTemperatureC)) {
       setRemoteConfigStatus(false,
                             "target_temp_c",
                             "target out of allowed range");
@@ -704,6 +860,112 @@ void handleRemoteConfigMessage(const char* suffix,
     Serial.print("Remote target applied: ");
     DisplayFormat::printTemperatureC(Serial, requestedTargetTemperatureC);
     Serial.println(" C");
+    return;
+  }
+
+  const char* detail = nullptr;
+  if (strcmp(suffix, kSetCoolingOnDeltaSuffix) == 0) {
+    float value = NAN;
+    if (!parseFloatPayload(payloadText, &value) ||
+        !updateControlConfigFloat(value,
+                                  &ControlConfig::coolingOnDeltaC,
+                                  &detail)) {
+      setRemoteConfigStatus(false,
+                            "cooling_on_delta_c",
+                            detail != nullptr ? detail : "invalid value");
+      Serial.print("Remote cooling_on_delta_c rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "cooling_on_delta_c", detail);
+    Serial.print("Remote cooling_on_delta_c applied: ");
+    DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOnDeltaC);
+    Serial.println(" C");
+    return;
+  }
+
+  if (strcmp(suffix, kSetCoolingOffDeltaSuffix) == 0) {
+    float value = NAN;
+    if (!parseFloatPayload(payloadText, &value) ||
+        !updateControlConfigFloat(value,
+                                  &ControlConfig::coolingOffDeltaC,
+                                  &detail)) {
+      setRemoteConfigStatus(false,
+                            "cooling_off_delta_c",
+                            detail != nullptr ? detail : "invalid value");
+      Serial.print("Remote cooling_off_delta_c rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "cooling_off_delta_c", detail);
+    Serial.print("Remote cooling_off_delta_c applied: ");
+    DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOffDeltaC);
+    Serial.println(" C");
+    return;
+  }
+
+  if (strcmp(suffix, kSetHighCoolingDeltaSuffix) == 0) {
+    float value = NAN;
+    if (!parseFloatPayload(payloadText, &value) ||
+        !updateControlConfigFloat(value,
+                                  &ControlConfig::highCoolingDeltaC,
+                                  &detail)) {
+      setRemoteConfigStatus(false,
+                            "high_cooling_delta_c",
+                            detail != nullptr ? detail : "invalid value");
+      Serial.print("Remote high_cooling_delta_c rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "high_cooling_delta_c", detail);
+    Serial.print("Remote high_cooling_delta_c applied: ");
+    DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.highCoolingDeltaC);
+    Serial.println(" C");
+    return;
+  }
+
+  if (strcmp(suffix, kSetFanLowPwmSuffix) == 0) {
+    uint8_t value = 0;
+    if (!parseUInt8Payload(payloadText, &value) ||
+        !updateControlConfigPwm(value,
+                                &ControlConfig::fanLowPwmPercent,
+                                &detail)) {
+      setRemoteConfigStatus(false,
+                            "fan_low_pwm_percent",
+                            detail != nullptr ? detail : "invalid value");
+      Serial.print("Remote fan_low_pwm_percent rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "fan_low_pwm_percent", detail);
+    Serial.print("Remote fan_low_pwm_percent applied: ");
+    Serial.print(runtimeControlConfig.fanLowPwmPercent);
+    Serial.println("%");
+    return;
+  }
+
+  if (strcmp(suffix, kSetFanHighPwmSuffix) == 0) {
+    uint8_t value = 0;
+    if (!parseUInt8Payload(payloadText, &value) ||
+        !updateControlConfigPwm(value,
+                                &ControlConfig::fanHighPwmPercent,
+                                &detail)) {
+      setRemoteConfigStatus(false,
+                            "fan_high_pwm_percent",
+                            detail != nullptr ? detail : "invalid value");
+      Serial.print("Remote fan_high_pwm_percent rejected: ");
+      Serial.println(payloadText);
+      return;
+    }
+
+    setRemoteConfigStatus(true, "fan_high_pwm_percent", detail);
+    Serial.print("Remote fan_high_pwm_percent applied: ");
+    Serial.print(runtimeControlConfig.fanHighPwmPercent);
+    Serial.println("%");
     return;
   }
 
@@ -760,11 +1022,17 @@ void handleSerialCommand(const char* command) {
     Serial.print("Cooling enters at target delta: +");
     DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOnDeltaC);
     Serial.println(" C");
+    Serial.print("Cooling enters fan-high at target delta: +");
+    DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.highCoolingDeltaC);
+    Serial.println(" C");
     Serial.print("Cooling leaves at target delta: ");
     DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOffDeltaC);
     Serial.println(" C");
-    Serial.print("Quiet cooling PWM: ");
-    Serial.print(runtimeControlConfig.quietCoolingPwmPercent);
+    Serial.print("Fan-low PWM: ");
+    Serial.print(runtimeControlConfig.fanLowPwmPercent);
+    Serial.println("%");
+    Serial.print("Fan-high PWM: ");
+    Serial.print(runtimeControlConfig.fanHighPwmPercent);
     Serial.println("%");
     return;
   }
@@ -802,6 +1070,7 @@ void handleSerialCommand(const char* command) {
 
       const bool published = mqttTelemetry.publishTelemetry(millis(),
                                                             lastControlSnapshot,
+                                                            runtimeControlConfig,
                                                             otaTelemetrySnapshot,
                                                             lastFaultSnapshot,
                                                             lastFaultPolicySnapshot,
@@ -870,16 +1139,12 @@ void processSerialInput() {
 ControlInputs buildControlInputs(const SensorSnapshot& sensorSnapshot) {
   const TrackedSensorSnapshot& waterSensor =
       sensorSnapshot.trackedSensors[kWaterSensorIndex];
-  const TrackedSensorSnapshot& airSensor =
-      sensorSnapshot.trackedSensors[kAirSensorIndex];
 
   return {
       hasConfiguredTargetTemperature,
       requestedTargetTemperatureC,
       waterSensor.sampleValid,
       waterSensor.temperatureC,
-      airSensor.sampleValid,
-      airSensor.temperatureC,
       lastControlSnapshot.mode,
   };
 }
@@ -899,8 +1164,8 @@ void setup() {
   delay(1500);
 
   const bool preferencesOk = beginPreferences();
-  loadPersistedTargetTemperature();
   initializeRuntimeControlConfig();
+  loadPersistedTargetTemperature();
   const bool fanReady = fanDriver.begin();
   const bool rpmReady = rpmMonitor.begin();
   const bool sensorBusReady = sensorManager.begin(millis());
@@ -923,7 +1188,6 @@ void setup() {
   Serial.print("1-Wire bus GPIO: ");
   Serial.println(kSensorManagerConfig.oneWirePin);
   printConfiguredRom("Configured water sensor ROM: ", kWaterSensorRomCode);
-  printConfiguredRom("Configured air sensor ROM: ", kAirSensorRomCode);
   printTemperatureLine("Default target temperature: ",
                        kDefaultControlConfig.defaultTargetTemperatureC);
   Serial.print("Loaded target source: ");
@@ -936,11 +1200,17 @@ void setup() {
   Serial.print("Cooling enters at target delta: +");
   DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOnDeltaC);
   Serial.println(" C");
+  Serial.print("Cooling enters fan-high at target delta: +");
+  DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.highCoolingDeltaC);
+  Serial.println(" C");
   Serial.print("Cooling leaves at target delta: ");
   DisplayFormat::printTemperatureC(Serial, runtimeControlConfig.coolingOffDeltaC);
   Serial.println(" C");
-  Serial.print("Quiet cooling PWM: ");
-  Serial.print(runtimeControlConfig.quietCoolingPwmPercent);
+  Serial.print("Fan-low PWM: ");
+  Serial.print(runtimeControlConfig.fanLowPwmPercent);
+  Serial.println("%");
+  Serial.print("Fan-high PWM: ");
+  Serial.print(runtimeControlConfig.fanHighPwmPercent);
   Serial.println("%");
   printTrackedSensorDetails(sensorSnapshot, millis());
   printDiscoveredBusSensors(sensorSnapshot);
@@ -982,6 +1252,7 @@ void loop() {
   if (telemetryPublishRequested && lastFaultSnapshotValid) {
     const bool published = mqttTelemetry.publishTelemetry(nowMs,
                                                           lastControlSnapshot,
+                                                          runtimeControlConfig,
                                                           otaTelemetrySnapshot,
                                                           lastFaultSnapshot,
                                                           lastFaultPolicySnapshot,
@@ -1009,6 +1280,7 @@ void loop() {
                    nowMs);
   mqttTelemetry.publishTelemetry(nowMs,
                                  lastControlSnapshot,
+                                 runtimeControlConfig,
                                  otaTelemetrySnapshot,
                                  lastFaultSnapshot,
                                  lastFaultPolicySnapshot,

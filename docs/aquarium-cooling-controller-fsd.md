@@ -28,11 +28,9 @@ plausibility-based fault detection.
 - Keep water temperature within an aquarium-safe band around the configured
   target rather than chasing fine-grained sub-degree precision.
 - Minimize unnecessary fan runtime through a simple hysteresis-based water
-  controller with a fixed quiet cooling stage.
-- Preserve under-lid air temperature as a diagnostic and observability input
-  without making it a direct driver of the fan command.
+  controller with fixed low and high cooling stages.
 - Characterize the selected fan automatically before production deployment.
-- Persist target temperature and selected controller settings across reboot.
+- Persist target temperature and supported controller settings across reboot.
 - Detect implausible fan behavior using measured curve data and tolerance logic.
 - Expose telemetry and selected configuration over MQTT without making cooling
   dependent on MQTT or Wi-Fi.
@@ -52,9 +50,9 @@ plausibility-based fault detection.
 1. The ESP32 boots, initializes hardware, and loads persisted configuration.
 2. In characterization mode, the ESP32 runs an automatic fan test and prints
    reusable curve data via serial.
-3. In production mode, the ESP32 reads DS18B20 water and air temperature.
+3. In production mode, the ESP32 reads DS18B20 water temperature.
 4. The controller computes the fan state from water temperature relative to the
-   configured target, using hysteresis and a fixed low-noise PWM cooling stage.
+   configured target, using hysteresis and fixed low/high PWM cooling stages.
 5. The ESP32 drives the fan, measures tachometer RPM, and evaluates
    plausibility above the stable operating range.
 6. Wi-Fi and MQTT publish telemetry, and a manually enabled OTA maintenance
@@ -90,10 +88,10 @@ Non-critical functions:
 
 Runtime interactions:
 
-1. Sensor manager provides water and air temperature samples.
+1. Sensor manager provides water temperature samples.
 2. Config manager provides validated persisted settings.
 3. Control engine computes the water-driven control state and corresponding
-   fixed PWM command.
+   staged PWM command.
 4. Fan driver applies PWM and exposes commanded duty cycle.
 5. RPM monitor measures actual fan speed.
 6. Fault monitor compares measured RPM to the expected curve.
@@ -109,12 +107,11 @@ Runtime interactions:
 | MCU | ESP32-WROOM-32E on ESP32-DevKitC V4 | Main controller |
 | Fan | 120 mm 4-pin PWM fan, e.g. Noctua NF-S12A PWM | Cooling actuator |
 | Water sensor | DS18B20 | Primary control variable |
-| Air sensor | DS18B20 | Diagnostic and observability input |
 | Power input | USB-C PD trigger requesting 12 V | Single-cable power source |
 | 5 V PSU | Switched-mode 12 V to 5 V supply / buck converter | Controller supply |
 | 1-Wire pull-up | 3.3 kOhm to 3.3 V | Bus biasing in the verified bench setup |
 | Tach pull-up | 3.3 kOhm to 3.3 V | Open-collector tach input biasing in the verified bench setup |
-| Terminal blocks | Fan, water sensor, air sensor connectors | Field wiring termination |
+| Terminal blocks | Fan and water sensor connectors | Field wiring termination |
 
 Pin assignment:
 
@@ -122,7 +119,7 @@ Pin assignment:
 |---|---:|---|
 | Fan PWM | 25 | 25 kHz PWM output |
 | Fan TACH | 26 | Interrupt-capable input with 3.3 kOhm pull-up to 3.3 V |
-| 1-Wire bus | 33 | Shared bus for both DS18B20 sensors |
+| 1-Wire bus | 33 | DS18B20 bus for the water sensor |
 
 Fan connector pinout:
 
@@ -151,7 +148,7 @@ Planned software modules:
 | `config` | Preferences/NVS persistence and validation |
 | `fan_characterization` | Automated standalone fan test sketch |
 | `sensor_manager` | DS18B20 discovery, ROM-ID assignment, sample acquisition |
-| `control_engine` | Water-only hysteresis control and PWM command selection |
+| `control_engine` | Water-only hysteresis control and staged PWM command selection |
 | `fan_driver` | PWM output handling and start-boost support |
 | `rpm_monitor` | Tach pulse counting and RPM calculation |
 | `fault_monitor` | Plausibility checking, debounce, fault latching |
@@ -176,11 +173,14 @@ Persistence model:
 - Current implementation persists the target temperature
 - Invalid persisted target values shall be cleared and replaced with the
   default target temperature
-- The simplified control strategy shall persist only the target temperature and
-  optional high-level mode or override state; hysteresis deltas and fixed quiet
-  PWM defaults remain documented constants unless future validation justifies
-  exposing them
-- Sensor role mapping shall use DS18B20 ROM IDs rather than bus order
+- The simplified control strategy shall persist target temperature and the
+  supported remote-configurable controller settings:
+  `cooling_on_delta_c`, `cooling_off_delta_c`, `high_cooling_delta_c`,
+  `fan_low_pwm_percent`, and `fan_high_pwm_percent`
+- Invalid or inconsistent persisted controller values shall be cleared and
+  replaced with documented defaults
+- Sensor role mapping shall use the water-sensor DS18B20 ROM ID rather than bus
+  order
 
 Update model:
 
@@ -244,12 +244,12 @@ Dependencies:
 
 Scope:
 
-- Integrate DS18B20 water and air temperature sensing
-- Implement local hysteresis-based water cooling control using persisted
+- Integrate DS18B20 water temperature sensing
+- Implement local hysteresis-based staged water cooling control using persisted
   configuration
-- Apply a fixed quiet cooling stage and optional start-boost support
+- Apply fixed low/high cooling stages and optional start-boost support
 - Add fan plausibility checking using measured curve interpolation
-- Introduce fault handling for fan and sensor failures
+- Introduce fault handling for fan and water-sensor failures
 
 Deliverables:
 
@@ -288,9 +288,10 @@ diagnostics are implemented and verified against the local MQTT broker.
 Manual BIN-only OTA upload is implemented and now also verified on the fully
 wired controller hardware, including MQTT-triggered OTA enable and MQTT
 publication of the active upload endpoint. The current production firmware uses
-the revised water-driven control architecture and exposes only the documented
-reduced remote-control surface. The checked-in FHEM `MQTT2_DEVICE` integration
-is aligned to that current topic set.
+the revised water-driven control architecture; the target-state FSD extends that
+surface to staged cooling and a broader validated MQTT control surface. The
+checked-in FHEM `MQTT2_DEVICE` integration shall be updated in lockstep with the
+documented topic set.
 
 Deliverables:
 
@@ -335,18 +336,19 @@ Dependencies:
 
 - FR-2.1 [Must]: The production controller shall read water temperature from a
   dedicated DS18B20 sensor identified by ROM ID.
-- FR-2.2 [Must]: The production controller shall read air temperature from a
-  dedicated DS18B20 sensor identified by ROM ID for diagnostics, telemetry, and
-  future evaluation.
-- FR-2.3 [Must]: The production controller shall compute the primary cooling
+- FR-2.2 [Must]: The production controller shall compute the primary cooling
   state from water temperature relative to the configured target temperature.
-- FR-2.4 [Must]: The production controller shall switch from `fan-off` to a
-  fixed quiet cooling stage when water temperature reaches the configured upper
-  hysteresis threshold relative to target.
-- FR-2.5 [Must]: The production controller shall switch from the fixed quiet
-  cooling stage back to `fan-off` when water temperature reaches the configured
-  lower hysteresis threshold relative to target and shall otherwise hold the
-  previously active state within the hysteresis band.
+- FR-2.3 [Must]: The production controller shall switch from `fan-off` to
+  `fan-low` when water temperature reaches the configured upper hysteresis
+  threshold relative to target.
+- FR-2.4 [Must]: The production controller shall switch from `fan-low` to
+  `fan-high` when water temperature reaches the configured high-cooling delta
+  threshold relative to target.
+- FR-2.5 [Must]: The production controller shall switch from `fan-high` back to
+  `fan-low` when water temperature falls below the configured high-cooling delta
+  threshold and shall switch from `fan-low` back to `fan-off` when water
+  temperature reaches the configured lower hysteresis threshold relative to
+  target.
 - FR-2.6 [Should]: The production controller should apply start-boost behavior
   when needed to improve reliable low-speed fan startup.
 - FR-2.7 [Must]: The production controller shall drive the fan through a PWM
@@ -354,7 +356,7 @@ Dependencies:
 - FR-2.8 [Must]: The production controller shall measure fan RPM from the tach
   signal using pulse counting.
 - FR-2.9 [Must]: The production controller shall persist target temperature and
-  any supported high-level override or mode state in Preferences/NVS.
+  all supported remote-configurable controller settings in Preferences/NVS.
 - FR-2.10 [Must]: The production controller shall load persisted configuration
   at boot, validate it, and apply defaults if stored values are invalid.
 - FR-2.11 [Must]: The production controller shall continue local cooling
@@ -373,23 +375,19 @@ Dependencies:
   state.
 - FR-3.5 [Must]: The production controller shall enter a defined fallback fault
   behavior when the water-temperature sensor is unavailable.
-- FR-3.6 [Must]: The production controller shall continue water-based cooling
-  control when the air-temperature sensor fails and shall continue to expose the
-  degraded air-sensor state through diagnostics without changing the water-based
-  control decision.
-- FR-3.7 [Should]: The production controller should support recovery from a fan
+- FR-3.6 [Should]: The production controller should support recovery from a fan
   plausibility fault only after multiple consecutive valid matches.
 
 #### Phase 3 - MQTT Integration
 
-- FR-4.1 [Must]: The production controller shall publish water temperature, air
-  temperature, fan PWM, fan RPM, target temperature, controller mode, and fault
-  status over MQTT. This is implemented and broker-verified for the documented
-  telemetry surface.
+- FR-4.1 [Must]: The production controller shall publish water temperature, fan
+  PWM, fan RPM, target temperature, active staged-control parameters,
+  controller mode, and fault status over MQTT.
 - FR-4.2 [Must]: The production controller shall accept validated remote
-  updates for target temperature and selected non-critical service flags over
-  MQTT, reject invalid payloads without overwriting valid persisted settings,
-  and report the result through diagnostics or MQTT status topics.
+  updates for target temperature and all supported normal controller parameters
+  over MQTT, validate each requested change against the complete resulting
+  configuration, reject invalid payloads without overwriting valid persisted
+  settings, and report the result through diagnostics or MQTT status topics.
 - FR-4.3 [Should]: The production controller should support a manual override
   mode for service or testing with explicit validation and clear state
   reporting.
@@ -447,7 +445,7 @@ Dependencies:
 
 - System only cools; it does not provide heating.
 - No local display or button interface is planned.
-- Water sensor role and air sensor role shall not depend on DS18B20 bus order.
+- Water-sensor identification shall not depend on DS18B20 bus order.
 - The final PWM electrical interface must be validated with the selected fan.
 - Fan plausibility tolerance and confirmed fan-fault reaction are not yet fully
   finalized.
@@ -466,8 +464,8 @@ Dependencies:
 | Fan PWM electrical interface is not fully compatible with the selected fan | Medium | High | Validate prototype waveform and startup behavior before production |
 | Low-PWM tach readings are unstable and trigger false faults | High | Medium | Exclude unstable region or widen tolerance below stable PWM |
 | Under-lid airflow differs from free-air characterization | Medium | Medium | Verify curve once in free air and again in installed configuration |
-| Fixed low PWM may be too weak during seasonal heat peaks | Medium | Medium | Validate the simplified control stage in summer-like conditions and add a second stage only if measurements justify it |
-| DS18B20 bus or role mapping errors swap water and air sensors | Low | High | Assign roles by ROM ID and verify mapping at commissioning |
+| Fixed low PWM may be too weak during seasonal heat peaks | Medium | Medium | Validate the staged controller in summer-like conditions and tune the second stage if measurements justify it |
+| DS18B20 bus or role mapping errors misidentify the water sensor | Low | High | Assign the water sensor by ROM ID and verify mapping at commissioning |
 | Fault reaction for confirmed fan fault remains underspecified | Medium | High | Finalize explicit reaction before production release |
 | Unauthenticated OTA upload window is reachable by other clients on the local network | Low | High | Keep OTA disabled by default, require explicit service activation, limit the upload window, accept one upload attempt, and validate firmware identity before activation |
 
@@ -480,9 +478,7 @@ Dependencies:
 - The aquarium lid has both a dedicated fan opening and a separate air outlet,
   allowing effective airflow (assumed from project notes).
 - Water temperature is the only required closed-loop control input for the
-  simplified production strategy; air temperature remains useful as a diagnostic
-  and comparative observability value rather than a direct control input
-  (assumed from the logged aquarium trials).
+  simplified production strategy (assumed from the logged aquarium trials).
 - OTA uploads will be performed from a trusted client on the same local network
   during a short, explicitly enabled maintenance window (assumed).
 
@@ -499,7 +495,7 @@ Dependencies:
 - Semantic Versioning 2.0.0 release numbering rules
 - Keep a Changelog release-history format
 - USB-C PD trigger hardware
-- Selected 4-pin PWM fan and DS18B20 sensors
+- Selected 4-pin PWM fan and DS18B20 water sensor
 
 ### Environmental Constraints
 
@@ -517,7 +513,7 @@ Dependencies:
 |---|---|---|
 | 4-pin fan PWM | ESP32 -> fan | Speed command at nominal 25 kHz PWM |
 | 4-pin fan tach | fan -> ESP32 | Pulse feedback for RPM measurement |
-| 1-Wire bus | bidirectional | Shared DS18B20 bus for water and air sensors |
+| 1-Wire bus | bidirectional | DS18B20 bus for the water sensor |
 | USB serial | ESP32 -> host | Diagnostics and characterization output |
 | Wi-Fi | ESP32 <-> LAN | Production telemetry transport |
 | MQTT | ESP32 <-> broker | Production state publish and remote set commands |
@@ -532,11 +528,15 @@ configuration file.
 | Topic | Direction | Purpose |
 |---|---|---|
 | `aquarium/cooling/state/water_temp_c` | publish | Water temperature, rounded to one decimal place at the output boundary |
-| `aquarium/cooling/state/air_temp_c` | publish | Air temperature, rounded to one decimal place at the output boundary |
 | `aquarium/cooling/state/fan_pwm_percent` | publish | Commanded fan PWM |
 | `aquarium/cooling/state/fan_rpm` | publish | Measured fan RPM |
 | `aquarium/cooling/state/target_temp_c` | publish | Active target temperature, rounded to one decimal place at the output boundary |
-| `aquarium/cooling/state/controller_mode` | publish | Active control state such as `fan-off`, `fan-low`, `manual_override`, or `fault_mode` |
+| `aquarium/cooling/state/cooling_on_delta_c` | publish | Active upper hysteresis delta relative to target |
+| `aquarium/cooling/state/cooling_off_delta_c` | publish | Active lower hysteresis delta relative to target |
+| `aquarium/cooling/state/high_cooling_delta_c` | publish | Active delta relative to target that enters `fan-high` |
+| `aquarium/cooling/state/fan_low_pwm_percent` | publish | Active fixed PWM used for `fan-low` |
+| `aquarium/cooling/state/fan_high_pwm_percent` | publish | Active fixed PWM used for `fan-high` |
+| `aquarium/cooling/state/controller_mode` | publish | Active control state such as `fan-off`, `fan-low`, `fan-high`, or `water-sensor-fallback` |
 | `aquarium/cooling/diagnostic/expected_rpm` | publish | Interpolated expected RPM |
 | `aquarium/cooling/diagnostic/rpm_tolerance` | publish | Current RPM tolerance |
 | `aquarium/cooling/diagnostic/rpm_error` | publish | Measured minus expected RPM |
@@ -546,7 +546,6 @@ configuration file.
 | `aquarium/cooling/status/fan_plausible` | publish | Plausibility state |
 | `aquarium/cooling/status/fan_fault` | publish | Latched fan fault |
 | `aquarium/cooling/status/water_sensor_ok` | publish | Water sensor health |
-| `aquarium/cooling/status/air_sensor_ok` | publish | Air sensor health |
 | `aquarium/cooling/status/cooling_degraded` | publish | Whether cooling effectiveness is degraded |
 | `aquarium/cooling/status/service_required` | publish | Whether operator action is required |
 | `aquarium/cooling/status/alarm_code` | publish | Fault summary |
@@ -563,6 +562,11 @@ configuration file.
 | `aquarium/cooling/status/remote_config_last_detail` | publish | Last remote-config apply/reject detail |
 | `aquarium/cooling/status/availability` | publish | MQTT online/offline availability |
 | `aquarium/cooling/set/target_temp_c` | subscribe | Remote target temperature |
+| `aquarium/cooling/set/cooling_on_delta_c` | subscribe | Remote upper hysteresis delta relative to target |
+| `aquarium/cooling/set/cooling_off_delta_c` | subscribe | Remote lower hysteresis delta relative to target |
+| `aquarium/cooling/set/high_cooling_delta_c` | subscribe | Remote `fan-high` delta relative to target |
+| `aquarium/cooling/set/fan_low_pwm_percent` | subscribe | Remote fixed PWM for `fan-low` |
+| `aquarium/cooling/set/fan_high_pwm_percent` | subscribe | Remote fixed PWM for `fan-high` |
 | `aquarium/cooling/set/ota_enable` | subscribe | Open or cancel the temporary OTA maintenance window |
 
 #### FHEM MQTT2 Monitoring Integration
@@ -573,12 +577,39 @@ The repository includes a FHEM `MQTT2_DEVICE` definition at:
 integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 ```
 
-It maps all currently published telemetry topics to explicit FHEM readings and
-shall expose the validated `setList` for target temperature and OTA
-maintenance-window control only after the simplified control-surface update is
-implemented. The file uses the verified bench root topic
+It maps the documented MQTT telemetry topics to explicit FHEM readings and
+shall expose the validated `setList` for the supported controller parameters
+plus OTA maintenance-window control. The file uses the verified bench root topic
 `aquarium_cooling`; deployments using the committed default root
 `aquarium/cooling` must adjust the root topic before importing it into FHEM.
+
+#### FHEM / DBLog Minimal Profile
+
+For long-running database logging, the default profile shall remain deliberately
+small and focus on tuning plus basis fault visibility.
+
+Recommended permanent DBLog readings:
+
+- `water_temp_c`
+- `target_temp_c`
+- `fan_pwm_percent`
+- `controller_mode`
+- `fan_fault`
+- `alarm_code`
+- `fault_severity`
+- `fault_response`
+- `availability`
+
+The following categories shall not be part of the permanent DBLog include by
+default:
+
+- detailed RPM and plausibility diagnostics
+- OTA detail readings
+- remote-config diagnostic details
+- any air-sensor-related telemetry
+
+Detailed fan and plausibility readings may be enabled temporarily for targeted
+debug campaigns and removed again afterward.
 
 #### OTA Update Interface
 
@@ -592,8 +623,8 @@ implemented. The file uses the verified bench root topic
 
 | Producer | Consumer | Interface |
 |---|---|---|
-| `sensor_manager` | `control_engine` | Water and air temperature samples |
-| `config` | `control_engine` | Validated target and high-level control settings |
+| `sensor_manager` | `control_engine` | Water temperature samples |
+| `config` | `control_engine` | Validated target and staged-control settings |
 | `control_engine` | `fan_driver` | Commanded PWM percentage |
 | `fan_driver` | `rpm_monitor` | Active PWM state for settling logic |
 | `rpm_monitor` | `fault_monitor` | Measured RPM |
@@ -616,7 +647,42 @@ implemented. The file uses the verified bench root topic
 |---|---|---|
 | `target_c` | float | Desired water temperature |
 | `target_set` | bool | Marks whether a custom target temperature is stored |
-| `control_mode` | enum | `fan-off`, `fan-low`, optional `manual_override`, or `fault_mode` |
+| `cooling_on_delta_c` | float | Upper hysteresis delta relative to target |
+| `cooling_off_delta_c` | float | Lower hysteresis delta relative to target |
+| `high_cooling_delta_c` | float | Delta relative to target that enters `fan-high` |
+| `fan_low_pwm_percent` | uint8 | Fixed PWM used for `fan-low` |
+| `fan_high_pwm_percent` | uint8 | Fixed PWM used for `fan-high` |
+
+#### Remote Configuration Validation Model
+
+- The controller shall accept individual MQTT set topics for
+  `target_temp_c`, `cooling_on_delta_c`, `cooling_off_delta_c`,
+  `high_cooling_delta_c`, `fan_low_pwm_percent`, and
+  `fan_high_pwm_percent`.
+- Each incoming update shall be validated against the complete resulting
+  configuration profile before it is applied or persisted.
+- Valid values shall be applied immediately to the runtime controller and then
+  persisted in Preferences/NVS.
+- Invalid or inconsistent updates shall be rejected without overwriting the
+  last valid persisted settings.
+
+Validation ranges for the normal staged control surface:
+
+| Field | Allowed Range / Rule |
+|---|---|
+| `target_temp_c` | Existing controller target range |
+| `cooling_on_delta_c` | `+0.1 .. +3.0 C` |
+| `cooling_off_delta_c` | `-3.0 .. -0.1 C` |
+| `high_cooling_delta_c` | `> cooling_on_delta_c`, at least `cooling_on_delta_c + 0.1 C` |
+| `fan_low_pwm_percent` | `15 .. 60` |
+| `fan_high_pwm_percent` | `20 .. 100` |
+
+Consistency rules:
+
+- `cooling_off_delta_c < 0`
+- `cooling_on_delta_c > 0`
+- `high_cooling_delta_c > cooling_on_delta_c`
+- `fan_high_pwm_percent > fan_low_pwm_percent`
 
 #### Diagnostics Payload
 
@@ -654,7 +720,7 @@ operation and diagnostics:
 | `status` | Print an immediate diagnostics block |
 | `target <c>` | Set and persist a custom water target temperature |
 | `default` | Clear persisted target and return to the default `23.0 C` |
-| `control` | Print the current hysteresis and fixed-PWM control defaults |
+| `control` | Print the current hysteresis and staged-PWM control defaults |
 | `faults` | Print the current local fault-policy defaults |
 | `network` | Print Wi-Fi/MQTT configuration and connection status |
 | `publish` | Publish telemetry immediately when MQTT is connected |
@@ -677,17 +743,23 @@ runtime command input.
 5. Integrate measured values into production firmware.
 6. Assign or update the production firmware SemVer version and update
    `CHANGELOG.md` before building a release candidate.
-7. Flash production firmware after control and fault parameters are finalized.
-8. Verify the temporary BIN-only OTA upload path after Wi-Fi integration is
+7. Build production firmware with:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
+   ```
+
+8. Flash production firmware after control and fault parameters are finalized.
+9. Verify the temporary BIN-only OTA upload path after Wi-Fi integration is
    available.
-9. Treat `.arduino-build/` as the canonical working build path and `build/`
-   as the canonical export/log directory. The sketch-local
-   `firmware/controller/build/` directory is an ignored Arduino tooling
-   artifact and may be deleted at any time.
+10. Treat `.arduino-build/` as the canonical working build path and `build/`
+    as the canonical export/log directory. The sketch-local
+    `firmware/controller/build/` directory is an ignored Arduino tooling
+    artifact and may be deleted at any time.
 
 ### Provisioning / Configuration
 
-1. Assign DS18B20 water and air roles by ROM ID.
+1. Assign the DS18B20 water-sensor role by ROM ID.
 2. Store the default target temperature in NVS.
 3. Validate persisted values at boot.
 4. In production mode, connect to Wi-Fi and MQTT only after local control is
@@ -697,11 +769,12 @@ runtime command input.
 
 ### Normal Operation
 
-1. Sample water and air temperature at the configured interval.
+1. Sample water temperature at the configured interval.
 2. Compare water temperature against the configured hysteresis thresholds
    relative to target.
-3. Enter or leave the fixed quiet cooling state based on those thresholds while
-   holding the current state inside the hysteresis band.
+3. Enter `fan-low`, `fan-high`, or `fan-off` based on those thresholds while
+   holding the current state inside the hysteresis band and across the
+   documented stage transitions.
 4. Apply the resulting fixed PWM command for the active state.
 5. Allow settling time after PWM changes before plausibility evaluation.
 6. Measure fan RPM and evaluate plausibility where valid.
@@ -727,15 +800,13 @@ runtime command input.
    the recovery.
 2. On water-sensor failure, enter `water-fallback` at `40%` PWM and raise a
    critical alarm.
-3. On air-sensor failure, continue water-based control unchanged, raise a
-   warning, and keep air telemetry flagged as degraded.
-4. On network failure, continue local control with the last valid persisted
+3. On network failure, continue local control with the last valid persisted
    settings.
-5. On confirmed fan fault, keep the locally computed PWM command, raise a
+4. On confirmed fan fault, keep the locally computed PWM command, raise a
    critical `fan-fault`, and require service. Hardware tests with missing tach
    feedback and a deliberately slowed fan verified this response; no automatic
    fan-fault boost is currently applied.
-6. On OTA upload or validation failure, remain on the currently working
+5. On OTA upload or validation failure, remain on the currently working
    firmware and report the failed update state.
 
 ## 8. Verification & Validation
@@ -755,20 +826,19 @@ runtime command input.
 
 | Test ID | Feature | Procedure | Success Criteria |
 |---|---|---|---|
-| TC-P2-01 | DS18B20 role assignment | Boot with both sensors connected and known ROM IDs | Water and air roles map to correct sensors |
+| TC-P2-01 | DS18B20 role assignment | Boot with the water sensor connected and its known ROM ID | Water role maps to the correct sensor |
 | TC-P2-02 | Water-threshold control | Simulate water temperature below, near, and above target | Fan state switches at the documented hysteresis thresholds |
-| TC-P2-03 | Hysteresis hold behavior | Move water temperature within the band after entering `fan-off` and `fan-low` | Current state is held until the opposite threshold is crossed |
-| TC-P2-04 | Fixed quiet cooling stage | Drive water temperature above the upper threshold | Commanded PWM equals the documented fixed low cooling stage |
-| TC-P2-05 | NVS persistence | Change target temperature, reboot device | Value survives reboot and reloads correctly |
+| TC-P2-03 | Hysteresis hold behavior | Move water temperature within the band after entering `fan-off`, `fan-low`, and `fan-high` | Current state is held until the documented transition threshold is crossed |
+| TC-P2-04 | Fixed cooling stages | Drive water temperature above the upper threshold and then above the high-stage threshold | Commanded PWM equals the documented `fan-low` and `fan-high` stage values |
+| TC-P2-05 | NVS persistence | Change target temperature and staged-control settings, reboot device | Values survive reboot and reload correctly |
 | TC-P2-06 | RPM measurement | Drive fan at stable PWM and compare with tach observations | RPM measurement is plausible and repeatable |
 | TC-P2-07 | Fault debounce | Inject repeated RPM mismatches above stable PWM | Fault latches only after configured consecutive mismatches |
 | TC-P2-08 | Water sensor failure | Disconnect or invalidate water sensor input | Controller enters defined fallback behavior and raises fault |
-| TC-P2-09 | Air sensor failure | Disconnect or invalidate air sensor input | Water-based cooling continues unchanged and air-sensor diagnostics degrade correctly |
-| TC-P2-10 | Recovery debounce | Restore valid RPM after induced mismatch series | Recovery occurs only after configured consecutive matches |
-| TC-P2-11 | Critical/runtime memory discipline | Inspect critical control path under normal operation and review implementation for avoidable heap use | No unnecessary dynamic allocation is present in critical runtime paths |
-| TC-P2-12 | Control/communication separation | Review module boundaries and disable network stack during runtime tests | Local control remains operational with communication logic absent or inactive |
-| TC-P2-13 | Boot sequencing | Boot with valid persisted config and delayed/unavailable network | Local control becomes valid before network initialization is required |
-| TC-P2-14 | OTA non-blocking startup | Boot with OTA support compiled in and no active OTA maintenance window | Local cooling starts before any OTA upload service is available |
+| TC-P2-09 | Recovery debounce | Restore valid RPM after induced mismatch series | Recovery occurs only after configured consecutive matches |
+| TC-P2-10 | Critical/runtime memory discipline | Inspect critical control path under normal operation and review implementation for avoidable heap use | No unnecessary dynamic allocation is present in critical runtime paths |
+| TC-P2-11 | Control/communication separation | Review module boundaries and disable network stack during runtime tests | Local control remains operational with communication logic absent or inactive |
+| TC-P2-12 | Boot sequencing | Boot with valid persisted config and delayed/unavailable network | Local control becomes valid before network initialization is required |
+| TC-P2-13 | OTA non-blocking startup | Boot with OTA support compiled in and no active OTA maintenance window | Local cooling starts before any OTA upload service is available |
 
 ### 8.3 Acceptance Tests
 
@@ -776,12 +846,13 @@ runtime command input.
 |---|---|---|---|
 | AT-01 | Autonomous cooling without network | Run production firmware with Wi-Fi and MQTT unavailable | Cooling control remains active locally |
 | AT-02 | Persisted configuration resilience | Store target temperature, reboot, then boot without network | Target remains active and cooling still works |
-| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state, diagnostic, and status topics for the simplified control surface are published, including one-decimal temperature values, OTA endpoint discovery, and remote-config status feedback |
-| AT-04 | Remote configuration safety | Publish valid and invalid set commands | Valid values apply and persist; invalid values are rejected without overwriting the last valid persisted settings |
-| AT-05 | FHEM MQTT2 integration | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings and can issue only the documented validated set commands for the simplified control surface |
-| AT-06 | Installed water-only control | Run controller in actual aquarium installation through light and dark phases | Water remains inside the accepted operating band with materially reduced fan runtime and no air-driven overcooling |
+| AT-03 | MQTT observability | Connect broker and inspect published topics | Required state, diagnostic, and status topics for the staged control surface are published, including active controller parameters, one-decimal temperature values, OTA endpoint discovery, and remote-config status feedback |
+| AT-04 | Remote configuration safety | Publish valid and invalid set commands for each supported parameter | Valid values apply immediately, persist, and remain consistent; invalid values are rejected without overwriting the last valid persisted settings |
+| AT-05 | FHEM MQTT2 integration | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings and can issue only the documented validated set commands for the controller parameters and OTA control |
+| AT-06 | Installed staged water-only control | Run controller in actual aquarium installation through light and dark phases | Water remains inside the accepted operating band with materially reduced fan runtime and no air-driven overcooling |
 | AT-07 | OTA success path | Enable the OTA maintenance window and upload a newer valid `.bin` firmware image from the local network | Firmware uploads, validates, activates, and reports success |
 | AT-08 | OTA failure rollback | Interrupt upload or upload an invalid `.bin` image during update test | Device preserves current working firmware and reports failure |
+| AT-09 | DBLog minimal profile | Export long-running FHEM/DBLog data with the documented include list | Core water, fan-state, fault, and availability analysis remains possible without logging high-volume diagnostic detail topics |
 | AT-10 | Release versioning and changelog | Inspect a release candidate before publication | Firmware version follows SemVer 2.0.0 and `CHANGELOG.md` follows Keep a Changelog with a matching release entry |
 
 ### 8.4 Traceability Matrix
@@ -802,9 +873,9 @@ Status interpretation in this matrix:
 | FR-1.5 | Must | TC-P1-05 | Covered |
 | FR-1.6 | Must | TC-P1-06 | Covered |
 | FR-2.1 | Must | TC-P2-01 | Bench-verified |
-| FR-2.2 | Must | TC-P2-01 | Bench-verified |
-| FR-2.3 | Must | TC-P2-02 | Planned |
-| FR-2.4 | Must | TC-P2-02, TC-P2-04 | Planned |
+| FR-2.2 | Must | TC-P2-02 | Planned |
+| FR-2.3 | Must | TC-P2-02, TC-P2-04 | Planned |
+| FR-2.4 | Must | TC-P2-03, TC-P2-04 | Planned |
 | FR-2.5 | Must | TC-P2-03 | Planned |
 | FR-2.6 | Should | TC-P2-04 | Planned |
 | FR-2.7 | Must | TC-P2-02, TC-P2-06 | Bench-verified |
@@ -817,13 +888,12 @@ Status interpretation in this matrix:
 | FR-3.3 | Must | TC-P2-07 | Bench-verified |
 | FR-3.4 | Must | TC-P2-07, AT-03 | Bench-verified |
 | FR-3.5 | Must | TC-P2-08 | Implemented |
-| FR-3.6 | Must | TC-P2-09 | Planned |
-| FR-3.7 | Should | TC-P2-10 | Implemented |
+| FR-3.6 | Should | TC-P2-09 | Implemented |
 | FR-4.1 | Must | AT-03 | Planned |
 | FR-4.2 | Must | AT-04 | Planned |
 | FR-4.3 | Should | AT-04 | Planned |
 | FR-4.4 | Must | AT-07, AT-08 | Bench-verified |
-| FR-4.5 | Must | TC-P2-13, TC-P2-14, AT-07 | Bench-verified |
+| FR-4.5 | Must | TC-P2-12, TC-P2-13, AT-07 | Bench-verified |
 | FR-4.6 | Must | AT-07, AT-08 | Bench-verified |
 | FR-4.7 | Must | AT-08 | Implemented |
 | FR-4.8 | Should | AT-07, AT-08 | Implemented |
@@ -832,12 +902,12 @@ Status interpretation in this matrix:
 | NFR-1.2 | Must | TC-P2-02, TC-P2-03, AT-06 | Planned |
 | NFR-1.3 | Must | TC-P2-05, AT-02 | Bench-verified |
 | NFR-1.4 | Must | TC-P2-02, TC-P2-07 | Bench-verified |
-| NFR-1.5 | Must | TC-P2-11 | Implemented |
-| NFR-1.6 | Should | TC-P2-12 | Implemented |
-| NFR-1.7 | Must | TC-P2-07, TC-P2-08, TC-P2-09, AT-03 | Bench-verified |
-| NFR-1.8 | Should | TC-P2-13, AT-01, AT-02 | Implemented |
+| NFR-1.5 | Must | TC-P2-10 | Implemented |
+| NFR-1.6 | Should | TC-P2-11 | Implemented |
+| NFR-1.7 | Must | TC-P2-07, TC-P2-08, AT-03 | Bench-verified |
+| NFR-1.8 | Should | TC-P2-12, AT-01, AT-02 | Implemented |
 | NFR-1.9 | Must | TC-P1-01 | Covered |
-| NFR-1.10 | Must | TC-P2-14, AT-01 | Bench-verified |
+| NFR-1.10 | Must | TC-P2-13, AT-01 | Bench-verified |
 | NFR-1.11 | Must | AT-07, AT-08 | Bench-verified |
 | NFR-1.12 | Must | AT-10 | Planned |
 | NFR-1.13 | Must | AT-10 | Planned |
@@ -848,8 +918,8 @@ Status interpretation in this matrix:
 |---|---|---|---|
 | Fan does not start at low PWM | Start threshold too low or PWM interface incompatible | Run characterization and inspect start PWM result | Increase start-boost or validate PWM electrical stage |
 | RPM reads zero while fan spins | Tach wiring or pull-up problem | Check GPIO26 signal, pull-up, and common ground | Correct wiring and confirm pulse measurement |
-| Water and air temperature appear swapped | DS18B20 roles assigned by bus order instead of ROM ID | Print detected ROM IDs and compare to configured mapping | Reassign and persist correct ROM-ID mapping |
-| Under-lid air becomes very warm while water remains stable | Water-only strategy is limiting fan runtime as intended, but lid airflow may still be insufficient for comfort margin | Compare water trend, air trend, and actual fan state through a full light phase | Accept the higher air temperature if water remains in band, or add a second water-triggered stage if real summer testing shows a need |
+| Water temperature seems implausible | Wrong DS18B20 identified as the water sensor | Print detected ROM IDs and compare to the configured water-sensor mapping | Reassign and persist the correct water-sensor ROM ID |
+| Water remains too warm during hot periods | Low stage is too weak or high stage enters too late | Compare water trend, controller mode, and configured deltas through a full light phase | Increase `fan_low_pwm_percent`, `fan_high_pwm_percent`, or reduce `high_cooling_delta_c` through validated configuration |
 | False fan faults near low PWM | Unstable tach region below stable operating range | Compare measured RPM to stable hold PWM region | Exclude low-PWM region or widen tolerance there |
 | Cooling stops after water sensor issue | Fallback behavior not configured or not applied correctly | Inspect fault logs and safe fallback branch | Implement and verify defined safe fallback PWM |
 | MQTT updates seem ignored | Network unavailable or payload invalid | Check broker connection and validation logs | Restore connectivity or send valid payload |
@@ -881,8 +951,9 @@ Status interpretation in this matrix:
 |---|---:|
 | Water target delta to enter cooling | +0.5 C |
 | Water target delta to leave cooling | -0.5 C |
-| Fixed quiet cooling PWM | 22 % |
-| Optional second stage | Out of scope for the first simplified control revision |
+| Water target delta to enter `fan-high` | +1.0 C |
+| Fixed `fan-low` cooling PWM | 22 % |
+| Fixed `fan-high` cooling PWM | 35 % |
 
 ### C. Default Naming
 
@@ -922,8 +993,10 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 
 ### E. Build Artifact Directory Policy
 
-- `.arduino-build/esp32_esp32_esp32/` is the canonical working build path for
-  repository-standard `arduino-cli` compile and upload commands.
+- `powershell -ExecutionPolicy Bypass -File .\tools\build.ps1` is the canonical
+  repository build entrypoint for firmware compilation and artifact export.
+- `.arduino-build/esp32_esp32_esp32/` is the canonical working build path used
+  by the repository build script.
 - `build/` is the canonical location for exported firmware binaries, merged
   images, and local serial or bench-capture logs.
 - `firmware/controller/build/` is a sketch-local Arduino tooling artifact
@@ -988,10 +1061,8 @@ FanCurvePoint curve[] = {
 
 - Final plausibility tolerance percentage after measured tuning
 - Final hardware implementation of PWM electrical compatibility
-- Whether manual override remains enabled in production firmware
 - Whether installed airflow requires a separate in-situ fan curve
-- Exact OTA upload window duration, enable command surface, and validation
-  policy details
+- Exact OTA upload window duration and final service-policy details
 
 ### I. Draft Schematic Sketch
 

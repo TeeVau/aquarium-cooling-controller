@@ -23,7 +23,6 @@ This Doxygen site focuses on source-level API documentation.
 
 - ESP32 board running the Arduino core.
 - DS18B20 water sensor on the shared OneWire bus.
-- DS18B20 air sensor on the same OneWire bus for warm-air assist.
 - Four-wire PWM fan with separate PWM command and tachometer feedback.
 - MQTT telemetry is optional; local cooling continues without Wi-Fi or broker access.
 

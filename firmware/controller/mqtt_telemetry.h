@@ -93,6 +93,7 @@ class MqttTelemetry {
    */
   bool publishTelemetry(uint32_t nowMs,
                         const ControlSnapshot& controlSnapshot,
+                        const ControlConfig& controlConfig,
                         const OtaTelemetrySnapshot& otaSnapshot,
                         const FaultMonitorSnapshot& faultSnapshot,
                         const FaultPolicySnapshot& policySnapshot,

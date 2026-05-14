@@ -1,19 +1,24 @@
 # FHEM MQTT2 Integration
 
-This directory contains the FHEM definition for observing and sending selected
-non-critical settings to the aquarium cooling controller through MQTT.
+This directory contains the FHEM definition for observing the aquarium cooling
+controller and sending validated staged-control settings through MQTT.
 
 ## Current Scope
 
-The current firmware publishes controller state, diagnostics, availability, and
-fault-policy readings, and it subscribes to a small validated `/set/...`
-surface for:
+The target control surface publishes controller state, diagnostics,
+availability, and fault-policy readings, and it subscribes to a validated
+`/set/...` surface for:
 
-- target temperature
-- OTA maintenance-window enable/cancel
+- `target_temp_c`
+- `cooling_on_delta_c`
+- `cooling_off_delta_c`
+- `high_cooling_delta_c`
+- `fan_low_pwm_percent`
+- `fan_high_pwm_percent`
+- `ota_enable`
 
 Local cooling on the ESP32 remains authoritative. FHEM is allowed to adjust
-only these non-critical persisted settings.
+only these validated persisted settings.
 
 ## Files
 
@@ -45,8 +50,12 @@ different value.
 Expected readings include:
 
 - `water_temp_c`
-- `air_temp_c`
 - `target_temp_c`
+- `cooling_on_delta_c`
+- `cooling_off_delta_c`
+- `high_cooling_delta_c`
+- `fan_low_pwm_percent`
+- `fan_high_pwm_percent`
 - `fan_pwm_percent`
 - `fan_rpm`
 - `controller_mode`
@@ -57,7 +66,6 @@ Expected readings include:
 - `fan_plausible`
 - `fan_fault`
 - `water_sensor_ok`
-- `air_sensor_ok`
 - `cooling_degraded`
 - `service_required`
 - `alarm_code`
@@ -79,6 +87,24 @@ Expected readings include:
 Displayed temperature readings now arrive from the firmware already rounded to
 one decimal place. This is only an output-formatting change; the controller
 keeps full floating-point precision internally.
+
+## Recommended DBLog Profile
+
+For permanent long-running DBLog retention, keep the include list deliberately
+small. The recommended baseline is:
+
+- `water_temp_c`
+- `target_temp_c`
+- `fan_pwm_percent`
+- `controller_mode`
+- `fan_fault`
+- `alarm_code`
+- `fault_severity`
+- `fault_response`
+- `availability`
+
+Detailed RPM/plausibility topics, OTA detail readings, and remote-config status
+details are better enabled only temporarily for focused debug campaigns.
 
 ## Troubleshooting
 
