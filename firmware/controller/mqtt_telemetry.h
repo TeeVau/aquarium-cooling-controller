@@ -84,6 +84,7 @@ class MqttTelemetry {
    *
    * @param nowMs Current monotonic timestamp in milliseconds.
    * @param controlSnapshot Latest control-engine state.
+   * @param controlConfig Latest active staged-control configuration.
    * @param otaSnapshot Latest OTA maintenance state.
    * @param faultSnapshot Latest fan fault-monitor state.
    * @param policySnapshot Latest fault-policy state.
