@@ -24,19 +24,15 @@
 enum class AlarmCode : uint8_t {
   kNone,                   ///< No active alarm.
   kWaterSensorFault,       ///< Water sensor is invalid.
-  kAirSensorFault,         ///< Air sensor is invalid.
   kFanFault,               ///< Fan RPM plausibility fault is active.
   kWaterSensorAndFanFault, ///< Water sensor and fan faults are active together.
-  kAirSensorAndFanFault,   ///< Air sensor and fan faults are active together.
-  kMultipleFaults,         ///< Multiple faults are active and need combined handling.
 };
 
 /**
  * @brief Severity assigned to the current fault state.
  *
- * Severity expresses how much attention the fault needs. Air-sensor faults are
- * warnings because water control can continue, while water-sensor and fan faults
- * are critical because cooling quality or cooling capacity is degraded.
+ * Severity expresses how much attention the fault needs. Water-sensor and fan
+ * faults are critical because cooling quality or cooling capacity is degraded.
  */
 enum class FaultSeverity : uint8_t {
   kNone,     ///< No service action required.
@@ -53,7 +49,6 @@ enum class FaultSeverity : uint8_t {
  */
 enum class FaultResponse : uint8_t {
   kNormalControl,                  ///< Continue normal control behavior.
-  kReportAirSensorFault,           ///< Continue control unchanged while reporting the air-sensor fault.
   kWaterFallback,                  ///< Use fallback PWM because water input is invalid.
   kReportFanFault,                 ///< Continue commanding cooling but report fan fault.
   kWaterFallbackAndReportFanFault, ///< Use fallback PWM and report fan fault.
@@ -71,7 +66,6 @@ struct FaultPolicySnapshot {
   FaultSeverity severity;     ///< Selected severity.
   FaultResponse response;     ///< Recommended control response.
   bool waterSensorOk;         ///< True when water temperature input is valid.
-  bool airSensorOk;           ///< True when air temperature input is valid.
   bool fanOk;                 ///< True when fan plausibility is healthy.
   bool coolingDegraded;       ///< True when cooling capacity or control quality is degraded.
   bool serviceRequired;       ///< True when any alarm should be surfaced to the user.

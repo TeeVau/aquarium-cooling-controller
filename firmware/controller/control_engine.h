@@ -23,9 +23,21 @@ struct ControlConfig {
   float minimumTargetTemperatureC;     ///< Lowest accepted configured target in degrees Celsius.
   float maximumTargetTemperatureC;     ///< Highest accepted configured target in degrees Celsius.
   uint8_t fallbackPwmPercent;          ///< Fan PWM used when water temperature is unavailable.
-  float coolingOnDeltaC;               ///< Water delta above target where quiet cooling starts.
+  float minimumCoolingOnDeltaC;        ///< Lowest accepted upper hysteresis delta.
+  float maximumCoolingOnDeltaC;        ///< Highest accepted upper hysteresis delta.
+  float coolingOnDeltaC;               ///< Water delta above target where cooling starts.
+  float minimumCoolingOffDeltaC;       ///< Lowest accepted lower hysteresis delta.
+  float maximumCoolingOffDeltaC;       ///< Highest accepted lower hysteresis delta.
   float coolingOffDeltaC;              ///< Water delta below target where cooling stops.
-  uint8_t quietCoolingPwmPercent;      ///< Fixed PWM used during normal quiet cooling.
+  float minimumHighCoolingDeltaC;      ///< Lowest accepted delta where fan-high is allowed.
+  float maximumHighCoolingDeltaC;      ///< Highest accepted delta where fan-high is allowed.
+  float highCoolingDeltaC;             ///< Water delta above target where fan-high starts.
+  uint8_t minimumFanLowPwmPercent;     ///< Lowest accepted fixed PWM for fan-low.
+  uint8_t maximumFanLowPwmPercent;     ///< Highest accepted fixed PWM for fan-low.
+  uint8_t fanLowPwmPercent;            ///< Fixed PWM used during fan-low cooling.
+  uint8_t minimumFanHighPwmPercent;    ///< Lowest accepted fixed PWM for fan-high.
+  uint8_t maximumFanHighPwmPercent;    ///< Highest accepted fixed PWM for fan-high.
+  uint8_t fanHighPwmPercent;           ///< Fixed PWM used during fan-high cooling.
 };
 
 /**
@@ -37,7 +49,8 @@ struct ControlConfig {
  */
 enum class ControlMode : uint8_t {
   kFanOff,                ///< Water-driven hysteresis currently keeps the fan off.
-  kFanLow,                ///< Water-driven hysteresis currently commands the fixed quiet PWM.
+  kFanLow,                ///< Water-driven hysteresis currently commands the low fixed PWM.
+  kFanHigh,               ///< Water-driven hysteresis currently commands the high fixed PWM.
   kWaterSensorFallback,   ///< Water sensor is invalid and fallback PWM is used.
 };
 
@@ -54,8 +67,6 @@ struct ControlInputs {
   float requestedTargetTemperatureC;   ///< Requested target water temperature in degrees Celsius.
   bool waterSensorValid;               ///< True when the water temperature sample is valid.
   float waterTemperatureC;             ///< Water temperature in degrees Celsius.
-  bool airSensorValid;                 ///< True when the ambient air temperature sample is valid.
-  float airTemperatureC;               ///< Ambient air temperature in degrees Celsius.
   ControlMode previousMode;            ///< Previously active control mode for hysteresis hold behavior.
 };
 
@@ -71,8 +82,6 @@ struct ControlSnapshot {
   bool targetDefaulted;           ///< True when the default target replaced an invalid request.
   bool waterSensorValid;          ///< True when the water temperature value is usable.
   float waterTemperatureC;        ///< Effective water temperature, or NAN when invalid.
-  bool airSensorValid;            ///< True when the air temperature value is usable.
-  float airTemperatureC;          ///< Effective air temperature, or NAN when invalid.
   float waterDeltaC;              ///< Water temperature minus target temperature.
   uint8_t waterBasedPwmPercent;   ///< PWM requested by water-temperature hysteresis control.
   uint8_t finalPwmPercent;        ///< Final commanded fan PWM percentage.
@@ -87,9 +96,21 @@ constexpr ControlConfig kDefaultControlConfig = {
     15.0f,
     35.0f,
     40,
+    0.1f,
+    3.0f,
     0.5f,
+    -3.0f,
+    -0.1f,
     -0.5f,
+    0.2f,
+    5.0f,
+    1.0f,
+    15,
+    60,
     22,
+    20,
+    100,
+    35,
 };
 
 namespace ControlEngine {
@@ -112,6 +133,14 @@ namespace ControlEngine {
  */
 bool isTargetTemperatureValid(float targetTemperatureC,
                               const ControlConfig& config = kDefaultControlConfig);
+
+/**
+ * @brief Checks whether a full staged-control configuration is internally valid.
+ *
+ * @param config Candidate control configuration.
+ * @return True when ranges and cross-field relationships are valid.
+ */
+bool isControlConfigValid(const ControlConfig& config);
 
 /**
  * @brief Replaces invalid target temperatures with the configured default.

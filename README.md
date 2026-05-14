@@ -9,14 +9,14 @@
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f)](https://teevau.github.io/aquarium-cooling-controller/)
 [![Pages Workflow](https://img.shields.io/github/actions/workflow/status/TeeVau/aquarium-cooling-controller/doxygen-pages.yml?branch=main&label=pages)](https://github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml)
 
-ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, shared 1-Wire DS18B20 sensing, tach-based fan plausibility monitoring, and broker-verified MQTT telemetry.
+ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, a water-temperature DS18B20 on a shared 1-Wire bus, tach-based fan plausibility monitoring, and broker-verified MQTT telemetry.
 
 ![Aquarium Cooling Controller hero preview](docs/assets/github-social-preview.png)
 
 ## Quick Start
 
 1. Read the [functional specification](docs/aquarium-cooling-controller-fsd.md) for system goals and constraints.
-2. Open [firmware/controller/controller.ino](firmware/controller/controller.ino) in Arduino IDE 2.x or compile it with `arduino-cli`.
+2. Open [firmware/controller/controller.ino](firmware/controller/controller.ino) in Arduino IDE 2.x or build it from the repo root with `powershell -ExecutionPolicy Bypass -File .\tools\build.ps1`.
 3. Install `OneWire`, `DallasTemperature`, and `PubSubClient`.
 4. Flash the controller and verify the serial `status` output at `115200` baud.
 5. For release artifacts, release notes, and tagged versions, use the [GitHub Releases page](https://github.com/TeeVau/aquarium-cooling-controller/releases).
@@ -43,26 +43,23 @@ ESP32-based aquarium cooling controller for a covered tank with local autonomous
 
 ## Overview
 
-This project controls aquarium cooling with a 4-pin PWM fan and two DS18B20 sensors:
-
-- one fixed water sensor for the main control variable
-- one fixed air sensor for warm-air assist under the lid
+This project controls aquarium cooling with a 4-pin PWM fan and one fixed DS18B20 water sensor as the main control variable.
 
 The main design rule is that cooling must continue to work locally on the ESP32 even when Wi-Fi, MQTT, or OTA services are unavailable. The controller therefore keeps sensing, target validation, PWM generation, RPM measurement, and fault handling on the device itself.
 
 The repository currently contains both:
 
 - a completed fan-characterization workflow for the selected Noctua fan
-- a released local controller firmware with water-only hysteresis control,
-  persisted target temperature, fault policy, broker-verified MQTT telemetry,
+- a released local controller firmware with water-only staged hysteresis control,
+  persisted runtime configuration, fault policy, broker-verified MQTT telemetry,
   and validated OTA over Wi-Fi
 
 ## Current Status
 
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
-Latest released firmware: `0.1.4` (`2026-05-01`).
-Current source version: `0.1.4`.
+Latest released firmware: `0.1.5`.
+Current source version: `0.1.6`.
 
 Implemented and bench-verified:
 
@@ -71,12 +68,12 @@ Implemented and bench-verified:
 - start-boost for reliable fan startup
 - measured PWM-to-RPM interpolation for plausibility checks
 - shared 1-Wire bus on `GPIO33`
-- fixed ROM-ID assignment for water and air sensors
-- local water-only hysteresis control
+- fixed ROM-ID assignment for the water sensor
+- local water-only staged hysteresis control
 - target temperature persistence in ESP32 Preferences / NVS
 - strict default and fallback target temperature of `23.0 C`
 - serial diagnostics with sensor, fan, and alarm information
-- verified local fault policy for water sensor, air sensor, tach, and RPM deviation failures
+- verified local fault policy for water sensor, tach, and RPM deviation failures
 
 Implemented and broker-verified:
 
@@ -84,9 +81,9 @@ Implemented and broker-verified:
 - MQTT telemetry publishing with `PubSubClient`
 - local secret override via ignored `network_config.local.h`
 - broker-side normal telemetry capture
-- broker-side fault telemetry for air sensor, water sensor, and fan-fault cases
-- validated MQTT remote configuration for target temperature and OTA maintenance
-  mode control
+- broker-side fault telemetry for water sensor and fan-fault cases
+- validated MQTT remote configuration for staged control parameters and OTA
+  maintenance mode control
 - OTA maintenance-window activation and cancellation over MQTT
 - manually enabled BIN-only OTA upload with live validation on the fully wired
   controller hardware
@@ -105,15 +102,17 @@ Implemented now:
 - Local autonomous control on ESP32 without network dependency
 - Fan characterization sketch for the selected 4-pin PWM fan
 - Measured fan curve reused in production firmware
-- Water-only hysteresis control with default target `23.0 C`
+- Water-only staged hysteresis control with default target `23.0 C`
 - Fixed DS18B20 role mapping by ROM ID instead of bus order
 - Target temperature persistence across reboot
+- Persisted staged control configuration across reboot
 - Safe fallback to `23.0 C` for invalid or missing target values
 - Tach plausibility diagnostics against the measured fan curve
 - Central fault-policy model with alarm severity and response labels
 - Hardware-verified fault responses for sensor failures and fan plausibility faults
 - Wi-Fi/MQTT telemetry that does not block local cooling
-- Validated MQTT remote configuration for target temperature and OTA enable
+- Validated MQTT remote configuration for target temperature, staged control
+  parameters, and OTA enable
 - Manually enabled BIN-only OTA firmware upload over Wi-Fi
 - MQTT publication of firmware version, controller IP, and active OTA upload URL
 - Serial service commands for diagnostics and bench operation
@@ -132,7 +131,7 @@ Bench hardware used so far:
 |---|---:|---|---|
 | ESP32 Dev Board | 1 | Main controller | Bench-tested with `esp32:esp32:esp32` |
 | Noctua NF-S12A PWM | 1 | Cooling actuator | 120 mm 4-pin PWM fan |
-| DS18B20 | 2 | Water and air temperature sensing | Shared 1-Wire bus |
+| DS18B20 | 1 | Water temperature sensing | Shared 1-Wire bus |
 | 12 V supply | 1 | Fan power | Common ground with ESP32 is mandatory |
 | `3.3 kOhm` pull-up | 1 | Tach input biasing | To `3.3 V` |
 | `3.3 kOhm` pull-up | 1 | 1-Wire bus biasing | To `3.3 V` |
@@ -178,7 +177,6 @@ Important notes:
 
 - `ESP32 GND`, fan ground, and the `12 V` supply ground must share a common reference.
 - Water sensor ROM: `28333844050000CB`
-- Air sensor ROM: `28244644050000DA`
 - A block-level wiring sketch is available in [docs/design/schematic-sketch.md](docs/design/schematic-sketch.md).
 
 ## Repository Layout
@@ -327,9 +325,11 @@ Use [firmware/controller/controller.ino](firmware/controller/controller.ino) for
 What it does today:
 
 - initializes PWM output, tach measurement, and the 1-Wire bus
-- assigns water and air sensors by fixed ROM ID
-- computes local water-only hysteresis fan demand
+- assigns the water sensor by fixed ROM ID
+- computes local water-only staged hysteresis fan demand
 - persists a user-set target temperature in Preferences / NVS
+- persists remote-configured staged control thresholds and PWM levels in
+  Preferences / NVS
 - falls back to the default target `23.0 C` if the stored or entered target is invalid
 - prints continuous diagnostics including target source, alarm code, sensor health, RPM plausibility, and assigned ROM IDs
 
@@ -382,8 +382,12 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | Topic suffix | Payload |
 |---|---|
 | `/state/water_temp_c` | water temperature or `unavailable`, formatted with one decimal place |
-| `/state/air_temp_c` | air temperature or `unavailable`, formatted with one decimal place |
 | `/state/target_temp_c` | active target temperature, formatted with one decimal place |
+| `/state/cooling_on_delta_c` | active fan-on delta, formatted with one decimal place |
+| `/state/cooling_off_delta_c` | active fan-off delta, formatted with one decimal place |
+| `/state/high_cooling_delta_c` | active fan-high delta, formatted with one decimal place |
+| `/state/fan_low_pwm_percent` | active fixed PWM for `fan-low` |
+| `/state/fan_high_pwm_percent` | active fixed PWM for `fan-high` |
 | `/state/fan_pwm_percent` | final commanded fan PWM |
 | `/state/fan_rpm` | measured fan RPM |
 | `/state/controller_mode` | local control mode |
@@ -396,7 +400,6 @@ Published topics use the root `aquarium/cooling` by default. The current local b
 | `/status/fan_plausible` | current plausibility result |
 | `/status/fan_fault` | latched fan fault |
 | `/status/water_sensor_ok` | water sensor health |
-| `/status/air_sensor_ok` | air sensor health |
 | `/status/alarm_code` | summarized fault code |
 | `/status/fault_severity` | `none`, `warning`, or `critical` |
 | `/status/fault_response` | local fault response |
@@ -418,6 +421,11 @@ The firmware now also subscribes to these validated remote `/set/...` topics:
 | Topic suffix | Payload |
 |---|---|
 | `/set/target_temp_c` | target temperature in Celsius |
+| `/set/cooling_on_delta_c` | fan-on delta in Celsius |
+| `/set/cooling_off_delta_c` | fan-off delta in Celsius |
+| `/set/high_cooling_delta_c` | fan-high delta in Celsius |
+| `/set/fan_low_pwm_percent` | fixed PWM percentage for `fan-low` |
+| `/set/fan_high_pwm_percent` | fixed PWM percentage for `fan-high` |
 | `/set/ota_enable` | `true`/`false` or `1`/`0`; `true` opens the OTA window and `false` cancels it |
 
 Temperature rounding happens only at output boundaries. Internal sensor samples,
@@ -434,7 +442,7 @@ integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 
 The FHEM definition creates readings for the published state, diagnostics,
 fault-policy values, MQTT availability, and remote-config feedback topics. It
-also exposes a `setList` for the validated target temperature and OTA
+also exposes a `setList` for the validated staged control parameters and OTA
 maintenance-window control. Local cooling on the ESP32 remains authoritative.
 
 For a broker-driven OTA workflow:
@@ -470,15 +478,14 @@ Verified controller milestone on hardware:
 - compile and flash successful
 - fan driver initialization successful
 - RPM monitor initialization successful
-- both DS18B20 sensors detected on the shared 1-Wire bus
-- water and air sensor ROMs matched correctly
+- DS18B20 water sensor detected on the shared 1-Wire bus
+- water sensor ROM matched correctly
 - default target temperature verified at `23.0 C`
 - invalid target input falls back to `23.0 C`
 - persisted target survives reboot
-- local water-only hysteresis control behaves plausibly
+- local water-only staged hysteresis control behaves plausibly
 - fault policy reports alarm code, severity, response, service requirement, and degraded-cooling state
 - water-sensor failure enters `water-sensor-fault`, `critical`, and `water-fallback` at `40%` PWM
-- air-sensor failure enters `air-sensor-fault`, `warning`, and `report-air-sensor-fault`
 - missing tach feedback enters `fan-fault`, `critical`, and `report-fan-fault`
 - slowed fan / RPM deviation outside tolerance enters `fan-fault` after the configured mismatch debounce
 - fan fault recovery returns to `none` after the configured plausible-match debounce
@@ -488,7 +495,6 @@ Verified controller milestone on hardware:
 - broker telemetry reports plausible normal values such as `water-control`, target `23.0`, fan RPM, expected RPM, tolerance, and RPM error
 - MQTT publishes the controller firmware version, current IP, and active OTA upload URL
 - MQTT-triggered OTA enable publishes `ota_upload_url`, and a successful BIN upload to `0.1.4` was verified on the fully wired controller
-- air-sensor fault publishes `air-sensor-fault`, `warning`, and `report-air-sensor-fault`
 - water-sensor fault publishes `water-sensor-fault`, `critical`, `water-fallback`, `cooling_degraded=true`, and fallback fan PWM
 - fan RPM deviation publishes `fan-fault`, `critical`, `report-fan-fault`, `cooling_degraded=true`, and `service_required=true`
 - broker telemetry returns to `alarm_code=none` after fault recovery
@@ -506,6 +512,10 @@ Useful artifacts:
 - [docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-fhem-export.csv)
 - [docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-summary.md](docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-summary.md)
 - [docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-fhem-export.csv](docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-fhem-export.csv)
+- [docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-summary.md](docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-summary.md)
+- [docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-fhem-export.csv](docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-fhem-export.csv)
+- [docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-summary.md](docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-summary.md)
+- [docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-fhem-export.csv](docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-fhem-export.csv)
 - [integrations/fhem/README.md](integrations/fhem/README.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)

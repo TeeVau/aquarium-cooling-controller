@@ -1,5 +1,13 @@
 # MQTT Telemetry - 2026-04-16
 
+> Historical note:
+> This document captures the MQTT telemetry scope as of `2026-04-16`.
+> The current controller firmware has since moved to staged water-only control,
+> removed the active air-sensor path, and expanded the validated MQTT remote
+> configuration surface. Treat this file as an implementation snapshot, not as
+> the current source of truth. The current target state is documented in the
+> FSD, README, and `integrations/fhem/README.md`.
+
 ## Goal
 
 Add Wi-Fi and MQTT observability without making local cooling dependent on

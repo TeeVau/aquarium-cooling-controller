@@ -14,13 +14,14 @@
 #include <DallasTemperature.h>
 #include <OneWire.h>
 
-constexpr size_t kMaxTrackedSensors = 2;    ///< Number of named sensors used by control logic.
+constexpr size_t kMaxTrackedSensors = 1;    ///< Number of named sensors used by control logic.
 constexpr size_t kMaxDiscoveredSensors = 4; ///< Maximum discovered OneWire devices retained for diagnostics.
 
 /**
  * @brief Configuration for one named temperature sensor.
  *
- * A tracked sensor is a role used by the control logic, such as water or air.
+ * A tracked sensor is a role used by the control logic, such as the water
+ * sensor.
  * Preferred ROM codes keep those roles stable even when more devices are present
  * on the bus.
  */

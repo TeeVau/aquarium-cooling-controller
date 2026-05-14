@@ -47,9 +47,13 @@ void SensorManager::update(uint32_t nowMs) {
     return;
   }
 
-  const bool anyTrackedSensorKnown =
-      snapshot_.trackedSensors[0].addressKnown ||
-      snapshot_.trackedSensors[1].addressKnown;
+  bool anyTrackedSensorKnown = false;
+  for (size_t trackedIndex = 0; trackedIndex < config_.trackedSensorCount; ++trackedIndex) {
+    if (snapshot_.trackedSensors[trackedIndex].addressKnown) {
+      anyTrackedSensorKnown = true;
+      break;
+    }
+  }
 
   if (!anyTrackedSensorKnown) {
     if (snapshot_.lastDiscoveryMs == 0 ||

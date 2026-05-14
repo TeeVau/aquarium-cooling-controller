@@ -84,6 +84,7 @@ class MqttTelemetry {
    *
    * @param nowMs Current monotonic timestamp in milliseconds.
    * @param controlSnapshot Latest control-engine state.
+   * @param controlConfig Latest active staged-control configuration.
    * @param otaSnapshot Latest OTA maintenance state.
    * @param faultSnapshot Latest fan fault-monitor state.
    * @param policySnapshot Latest fault-policy state.
@@ -93,6 +94,7 @@ class MqttTelemetry {
    */
   bool publishTelemetry(uint32_t nowMs,
                         const ControlSnapshot& controlSnapshot,
+                        const ControlConfig& controlConfig,
                         const OtaTelemetrySnapshot& otaSnapshot,
                         const FaultMonitorSnapshot& faultSnapshot,
                         const FaultPolicySnapshot& policySnapshot,

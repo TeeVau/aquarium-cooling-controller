@@ -15,6 +15,11 @@ namespace {
 constexpr size_t kTopicBufferSize = 96;
 constexpr size_t kPayloadBufferSize = 32;
 constexpr char kSetTargetTemperatureSuffix[] = "/set/target_temp_c";
+constexpr char kSetCoolingOnDeltaSuffix[] = "/set/cooling_on_delta_c";
+constexpr char kSetCoolingOffDeltaSuffix[] = "/set/cooling_off_delta_c";
+constexpr char kSetHighCoolingDeltaSuffix[] = "/set/high_cooling_delta_c";
+constexpr char kSetFanLowPwmSuffix[] = "/set/fan_low_pwm_percent";
+constexpr char kSetFanHighPwmSuffix[] = "/set/fan_high_pwm_percent";
 constexpr char kSetOtaEnableSuffix[] = "/set/ota_enable";
 
 MqttTelemetry* gActiveMqttTelemetry = nullptr;
@@ -94,6 +99,7 @@ void MqttTelemetry::update(uint32_t nowMs) {
 
 bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
                                      const ControlSnapshot& controlSnapshot,
+                                     const ControlConfig& controlConfig,
                                      const OtaTelemetrySnapshot& otaSnapshot,
                                      const FaultMonitorSnapshot& faultSnapshot,
                                      const FaultPolicySnapshot& policySnapshot,
@@ -111,13 +117,28 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
   ok &= publishFloatOrUnavailable("/state/water_temp_c",
                                   controlSnapshot.waterSensorValid,
                                   controlSnapshot.waterTemperatureC);
-  ok &= publishFloatOrUnavailable("/state/air_temp_c",
-                                  controlSnapshot.airSensorValid,
-                                  controlSnapshot.airTemperatureC);
   ok &= publishFloatOrUnavailable("/state/target_temp_c",
                                   true,
                                   controlSnapshot.targetTemperatureC,
                                   true);
+  ok &= publishFloatOrUnavailable("/state/cooling_on_delta_c",
+                                  true,
+                                  controlConfig.coolingOnDeltaC,
+                                  true);
+  ok &= publishFloatOrUnavailable("/state/cooling_off_delta_c",
+                                  true,
+                                  controlConfig.coolingOffDeltaC,
+                                  true);
+  ok &= publishFloatOrUnavailable("/state/high_cooling_delta_c",
+                                  true,
+                                  controlConfig.highCoolingDeltaC,
+                                  true);
+  ok &= publishUInt("/state/fan_low_pwm_percent",
+                    controlConfig.fanLowPwmPercent,
+                    true);
+  ok &= publishUInt("/state/fan_high_pwm_percent",
+                    controlConfig.fanHighPwmPercent,
+                    true);
   ok &= publishUInt("/state/fan_pwm_percent", controlSnapshot.finalPwmPercent);
   ok &= publishUInt("/state/fan_rpm", faultSnapshot.measuredRpm);
   ok &= publishText("/state/controller_mode",
@@ -133,7 +154,6 @@ bool MqttTelemetry::publishTelemetry(uint32_t nowMs,
   ok &= publishBool("/status/fan_fault", faultSnapshot.faultLatched, true);
 
   ok &= publishBool("/status/water_sensor_ok", policySnapshot.waterSensorOk, true);
-  ok &= publishBool("/status/air_sensor_ok", policySnapshot.airSensorOk, true);
   ok &= publishBool("/status/cooling_degraded",
                     policySnapshot.coolingDegraded,
                     true);
@@ -313,6 +333,31 @@ bool MqttTelemetry::subscribeRemoteConfigTopics() {
     return false;
   }
 
+  if (!buildTopic(kSetCoolingOnDeltaSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  if (!buildTopic(kSetCoolingOffDeltaSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  if (!buildTopic(kSetHighCoolingDeltaSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  if (!buildTopic(kSetFanLowPwmSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
+  if (!buildTopic(kSetFanHighPwmSuffix, topic, sizeof(topic)) ||
+      !mqttClient_.subscribe(topic)) {
+    return false;
+  }
+
   if (!buildTopic(kSetOtaEnableSuffix, topic, sizeof(topic)) ||
       !mqttClient_.subscribe(topic)) {
     return false;
@@ -381,6 +426,51 @@ void MqttTelemetry::handleMqttMessage(char* topic,
   if (buildTopic(kSetTargetTemperatureSuffix, expectedTopic, sizeof(expectedTopic)) &&
       strcmp(topic, expectedTopic) == 0) {
     remoteConfigCallback_(kSetTargetTemperatureSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetCoolingOnDeltaSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetCoolingOnDeltaSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetCoolingOffDeltaSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetCoolingOffDeltaSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetHighCoolingDeltaSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetHighCoolingDeltaSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetFanLowPwmSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetFanLowPwmSuffix,
+                          payload,
+                          (size_t)length,
+                          remoteConfigContext_);
+    return;
+  }
+
+  if (buildTopic(kSetFanHighPwmSuffix, expectedTopic, sizeof(expectedTopic)) &&
+      strcmp(topic, expectedTopic) == 0) {
+    remoteConfigCallback_(kSetFanHighPwmSuffix,
                           payload,
                           (size_t)length,
                           remoteConfigContext_);

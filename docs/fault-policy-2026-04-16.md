@@ -1,5 +1,12 @@
 # Fault Policy - 2026-04-16
 
+> Historischer Hinweis:
+> Dieses Dokument beschreibt den Fault-Policy-Stand vom `2026-04-16`.
+> Die aktuelle Firmware nutzt inzwischen die wassergefuehrte Staged-Control
+> Architektur ohne aktiven Luftsensorpfad. Luftsensor-spezifische Faults in
+> diesem Dokument sind deshalb als frueherer Entwicklungsstand zu lesen, nicht
+> als aktueller Sollzustand.
+
 ## Ziel
 
 Die lokale Firmware soll Fehler eindeutig klassifizieren, ohne die autonome

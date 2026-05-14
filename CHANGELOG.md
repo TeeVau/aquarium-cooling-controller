@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added staged water-only control with `fan-low` / `fan-high` states and
+  remote-configurable hysteresis deltas plus fixed PWM stages.
+- Added validated MQTT remote configuration for
+  `cooling_on_delta_c`, `cooling_off_delta_c`, `high_cooling_delta_c`,
+  `fan_low_pwm_percent`, and `fan_high_pwm_percent`, including persistence and
+  active-state publication.
+- Added concrete FHEM DBLog guidance for a minimal long-running production
+  profile.
+- Added archived live-test exports and summaries for the first `18%` and later
+  `22%` water-only controller generations.
+
+### Changed
+
+- Removed the active air-sensor control path from the current firmware,
+  simplified the tracked sensor model to a fixed water sensor, and reduced the
+  fault model accordingly.
+- Updated README, FSD, FHEM integration docs, and design diagrams to the staged
+  water-only architecture.
+- Improved the FHEM MQTT2 device presentation for firmware `0.1.6` with a
+  reading-driven `devStateIcon`, a compact status line, and documented use of
+  built-in FHEM SVG icons without custom assets.
+
 ## [0.1.4] - 2026-05-01
 
 ### Added
