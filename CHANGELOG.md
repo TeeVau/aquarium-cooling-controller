@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Improved the FHEM MQTT2 device presentation for firmware `0.1.6` with a
+  reading-driven `devStateIcon`, a compact status line, and documented use of
+  built-in FHEM SVG icons without custom assets.
+
 ## [0.1.4] - 2026-05-01
 
 ### Added

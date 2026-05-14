@@ -3,6 +3,10 @@
 This directory contains the FHEM definition for observing the aquarium cooling
 controller and sending validated staged-control settings through MQTT.
 
+The checked-in visual presentation is aligned with the current firmware source
+version `0.1.6` and uses only SVG icons that are already shipped with standard
+FHEM icon paths.
+
 ## Current Scope
 
 The target control surface publishes controller state, diagnostics,
@@ -25,6 +29,36 @@ only these validated persisted settings.
 | File | Purpose |
 |---|---|
 | `aquarium-cooling-mqtt2-device.cfg` | Pasteable FHEM `MQTT2_DEVICE` definition for telemetry plus the validated `setList` |
+
+## Visual State Mapping
+
+The `MQTT2_DEVICE` definition includes:
+
+- a fixed device `icon` using a standard FHEM SVG
+- a reading-driven Perl `devStateIcon`
+- a compact `stateFormat` for the textual status
+
+The icon priority is intentionally strict:
+
+1. MQTT availability
+2. OTA state while `ota_window_active=true`
+3. critical fault/alarm state
+4. degraded or fallback state
+5. normal cooling mode
+
+Completed or timed-out OTA end states remain available in the dedicated OTA
+readings, but they no longer override the main device icon once the OTA window
+is closed.
+
+For firmware `0.1.6`, the normal-mode mapping assumes:
+
+- `fan-off` => ready/idle
+- `fan-low` => active low-stage cooling
+- `fan-high` => active high-stage cooling
+- `water-sensor-fallback` => fallback/warning state
+
+Older pre-`0.1.6` controller-mode labels are intentionally not visualized in
+the checked-in config.
 
 ## Prerequisites
 
