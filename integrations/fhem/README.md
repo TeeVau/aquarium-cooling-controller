@@ -106,6 +106,37 @@ small. The recommended baseline is:
 Detailed RPM/plausibility topics, OTA detail readings, and remote-config status
 details are better enabled only temporarily for focused debug campaigns.
 
+### Suggested FHEM Configuration
+
+If your DbLog device is named `LogDB`, a practical minimal setup is:
+
+```text
+attr LogDB DbLogSelectionMode Include
+attr AquariumCooling DbLogInclude water_temp_c:300,target_temp_c:300,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
+```
+
+This keeps the long-running database focused on:
+
+- water temperature trend
+- effective target
+- commanded fan activity
+- state transitions
+- fault history
+- MQTT availability
+
+The `:300` suffix on the slower trend readings is a good starting point for a
+120-liter tank. Changed values still get logged; unchanged values do not flood
+the database. Leave `controller_mode`, `fan_fault`, `alarm_code`,
+`fault_severity`, `fault_response`, and `availability` without an interval so
+state changes are recorded immediately.
+
+For a temporary fan-debug campaign, extend the device-side include list
+temporarily with:
+
+```text
+fan_rpm,expected_rpm,rpm_tolerance,rpm_error,plausibility_active,fan_plausible
+```
+
 ## Troubleshooting
 
 If readings do not update, first compare the firmware's reported root topic
