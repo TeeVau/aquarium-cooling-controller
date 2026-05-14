@@ -22,14 +22,14 @@ sequenceDiagram
             Sensors->>Sensors: discover ROM IDs on shared 1-Wire bus
             Sensors->>Sensors: request temperature conversion
         else conversion pending and ready
-            Sensors->>Sensors: read water and air temperatures
+            Sensors->>Sensors: read water temperature
         else sample interval elapsed, 2000 ms
             Sensors->>Sensors: request next conversion
         end
 
         Sensors-->>Main: SensorSnapshot
         Main->>Control: compute(ControlInputs)
-        Control-->>Main: ControlSnapshot with mode and final PWM
+        Control-->>Main: ControlSnapshot with fan-off/fan-low/fan-high and final PWM
 
         Main->>Fan: setCommandedPwmPercent(final PWM)
         Main->>Fan: update(nowMs)

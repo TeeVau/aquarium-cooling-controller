@@ -3,6 +3,9 @@
 These Mermaid diagrams document the current controller firmware behavior in
 `firmware/controller`.
 
+The Mermaid source files below are the current source of truth. The rendered
+SVG/PNG artifacts may lag behind until they are regenerated.
+
 The diagrams are also available as standalone `.mmd` files for draw.io /
 diagrams.net imports:
 
@@ -28,32 +31,44 @@ stateDiagram-v2
     direction LR
 
     state "Setup" as Setup
-    state "Water control" as WaterControl
-    state "Water control + air assist" as AirAssist
+    state "Fan off" as FanOff
+    state "Fan low" as FanLow
+    state "Fan high" as FanHigh
     state "Water sensor fallback" as WaterFallback
 
     [*] --> Setup
-    Setup --> WaterControl: setup complete and water sample valid
+    Setup --> FanOff: setup complete and water sample valid
     Setup --> WaterFallback: water sample invalid
 
-    WaterControl --> AirAssist: air sample valid and air_pwm > water_pwm
-    AirAssist --> WaterControl: air sample invalid or water_pwm >= air_pwm
+    FanOff --> FanLow: water delta >= cooling_on_delta_c
+    FanOff --> FanHigh: water delta >= high_cooling_delta_c
+    FanLow --> FanOff: water delta <= cooling_off_delta_c
+    FanLow --> FanHigh: water delta >= high_cooling_delta_c
+    FanHigh --> FanLow: water delta < high_cooling_delta_c
 
-    WaterControl --> WaterFallback: water sample invalid
-    AirAssist --> WaterFallback: water sample invalid
-    WaterFallback --> WaterControl: water sample valid and water_pwm >= air_pwm
-    WaterFallback --> AirAssist: water sample valid and air_pwm > water_pwm
+    FanOff --> WaterFallback: water sample invalid
+    FanLow --> WaterFallback: water sample invalid
+    FanHigh --> WaterFallback: water sample invalid
+    WaterFallback --> FanOff: water sample valid and water delta < cooling_on_delta_c
+    WaterFallback --> FanLow: water sample valid and water delta >= cooling_on_delta_c and < high_cooling_delta_c
+    WaterFallback --> FanHigh: water sample valid and water delta >= high_cooling_delta_c
 
-    note right of WaterControl
-      ControlEngine mode: water-control
-      final_pwm = water_based_pwm
+    note right of FanOff
+      ControlEngine mode: fan-off
+      final_pwm = 0%
       target defaults to 23.0 C when invalid
     end note
 
-    note right of AirAssist
-      ControlEngine mode: water-control+air-assist
-      final_pwm = max(water_based_pwm, air_based_pwm)
-      air assist starts at 26.0 C and reaches full assist at 30.0 C
+    note right of FanLow
+      ControlEngine mode: fan-low
+      final_pwm = fan_low_pwm_percent
+      default low stage = 22%
+    end note
+
+    note right of FanHigh
+      ControlEngine mode: fan-high
+      final_pwm = fan_high_pwm_percent
+      default high stage = 35%
     end note
 
     note right of WaterFallback
@@ -66,35 +81,21 @@ stateDiagram-v2
         direction LR
 
         state "No alarm" as NoAlarm
-        state "Air sensor fault" as AirSensorFault
         state "Water sensor fault" as WaterSensorFault
         state "Fan fault" as FanFault
         state "Water sensor + fan fault" as WaterAndFanFault
-        state "Air sensor + fan fault" as AirAndFanFault
-        state "Multiple faults" as MultipleFaults
 
         [*] --> NoAlarm
-        NoAlarm --> AirSensorFault: air sample invalid
         NoAlarm --> WaterSensorFault: water sample invalid
         NoAlarm --> FanFault: RPM mismatch x3
 
-        AirSensorFault --> NoAlarm: air sample valid
         WaterSensorFault --> NoAlarm: water sample valid
         FanFault --> NoAlarm: RPM plausible x3
 
-        AirSensorFault --> AirAndFanFault: fan fault latched
         WaterSensorFault --> WaterAndFanFault: fan fault latched
-        FanFault --> AirAndFanFault: air sample invalid
         FanFault --> WaterAndFanFault: water sample invalid
 
-        AirAndFanFault --> FanFault: air sample valid
         WaterAndFanFault --> FanFault: water sample valid
-
-        AirSensorFault --> MultipleFaults: water sample invalid
-        WaterSensorFault --> MultipleFaults: air sample invalid
-        AirAndFanFault --> MultipleFaults: water sample invalid
-        WaterAndFanFault --> MultipleFaults: air sample invalid
-        MultipleFaults --> NoAlarm: all sensors valid and fan plausible
     }
 ```
 
@@ -104,7 +105,6 @@ stateDiagram-v2
 flowchart LR
   subgraph AQUA["Aquarium hardware"]
     WATER["DS18B20 water sensor<br/>ROM 28333844050000CB"]
-    AIR["DS18B20 air sensor<br/>ROM 28244644050000DA"]
     FAN["Noctua NF-S12A PWM fan<br/>12 V power"]
   end
 
@@ -116,14 +116,14 @@ flowchart LR
 
   subgraph LOCAL["ESP32 local autonomous control"]
     SENSOR["SensorManager<br/>2 s sample interval<br/>non-blocking DS18B20 conversion"]
-    CONTROL["ControlEngine<br/>target validation<br/>water demand + air assist"]
+    CONTROL["ControlEngine<br/>target validation<br/>water-only staged control"]
     DRIVER["FanDriver<br/>PWM command<br/>40% start boost for 2 s"]
     RPM["RpmMonitor<br/>1 s tach sample window"]
     CURVE["FanCurve<br/>expected RPM interpolation<br/>plausibility tolerance"]
     FAULTMON["FaultMonitor<br/>5 s settling<br/>3 mismatches to latch<br/>3 matches to recover"]
     POLICY["FaultPolicy<br/>alarm code<br/>severity<br/>local response"]
-    PREFS["Preferences / NVS<br/>persisted target temperature"]
-    SERIAL["Serial service console<br/>status, target, default,<br/>airassist, faults, network, publish"]
+    PREFS["Preferences / NVS<br/>persisted target + staged control config"]
+    SERIAL["Serial service console<br/>status, target, default,<br/>control, faults, network, publish"]
   end
 
   subgraph NET["Optional network telemetry"]
@@ -133,11 +133,10 @@ flowchart LR
   end
 
   WATER --- ONEWIRE
-  AIR --- ONEWIRE
   ONEWIRE --> SENSOR
 
   SENSOR -->|ControlInputs| CONTROL
-  PREFS -->|stored target| CONTROL
+  PREFS -->|stored target + staged config| CONTROL
   SERIAL -->|target/default commands| PREFS
   SERIAL -->|diagnostic commands| CONTROL
 
@@ -156,6 +155,7 @@ flowchart LR
   CONTROL --> MQTT
   FAULTMON --> MQTT
   POLICY --> MQTT
+  PREFS --> MQTT
   MQTT --> WIFI
   WIFI --> BROKER
 
@@ -191,14 +191,14 @@ sequenceDiagram
             Sensors->>Sensors: discover ROM IDs on shared 1-Wire bus
             Sensors->>Sensors: request temperature conversion
         else conversion pending and ready
-            Sensors->>Sensors: read water and air temperatures
+            Sensors->>Sensors: read water temperature
         else sample interval elapsed, 2000 ms
             Sensors->>Sensors: request next conversion
         end
 
         Sensors-->>Main: SensorSnapshot
         Main->>Control: compute(ControlInputs)
-        Control-->>Main: ControlSnapshot with mode and final PWM
+        Control-->>Main: ControlSnapshot with fan-off/fan-low/fan-high and final PWM
 
         Main->>Fan: setCommandedPwmPercent(final PWM)
         Main->>Fan: update(nowMs)

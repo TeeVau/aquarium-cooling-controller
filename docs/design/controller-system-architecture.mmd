@@ -1,7 +1,6 @@
 flowchart LR
   subgraph AQUA["Aquarium hardware"]
     WATER["DS18B20 water sensor<br/>ROM 28333844050000CB"]
-    AIR["DS18B20 air sensor<br/>ROM 28244644050000DA"]
     FAN["Noctua NF-S12A PWM fan<br/>12 V power"]
   end
 
@@ -13,14 +12,14 @@ flowchart LR
 
   subgraph LOCAL["ESP32 local autonomous control"]
     SENSOR["SensorManager<br/>2 s sample interval<br/>non-blocking DS18B20 conversion"]
-    CONTROL["ControlEngine<br/>target validation<br/>water demand + air assist"]
+    CONTROL["ControlEngine<br/>target validation<br/>water-only staged control"]
     DRIVER["FanDriver<br/>PWM command<br/>40% start boost for 2 s"]
     RPM["RpmMonitor<br/>1 s tach sample window"]
     CURVE["FanCurve<br/>expected RPM interpolation<br/>plausibility tolerance"]
     FAULTMON["FaultMonitor<br/>5 s settling<br/>3 mismatches to latch<br/>3 matches to recover"]
     POLICY["FaultPolicy<br/>alarm code<br/>severity<br/>local response"]
-    PREFS["Preferences / NVS<br/>persisted target temperature"]
-    SERIAL["Serial service console<br/>status, target, default,<br/>airassist, faults, network, publish"]
+    PREFS["Preferences / NVS<br/>persisted target + staged control config"]
+    SERIAL["Serial service console<br/>status, target, default,<br/>control, faults, network, publish"]
   end
 
   subgraph NET["Optional network telemetry"]
@@ -30,11 +29,10 @@ flowchart LR
   end
 
   WATER --- ONEWIRE
-  AIR --- ONEWIRE
   ONEWIRE --> SENSOR
 
   SENSOR -->|ControlInputs| CONTROL
-  PREFS -->|stored target| CONTROL
+  PREFS -->|stored target + staged config| CONTROL
   SERIAL -->|target/default commands| PREFS
   SERIAL -->|diagnostic commands| CONTROL
 
@@ -53,6 +51,7 @@ flowchart LR
   CONTROL --> MQTT
   FAULTMON --> MQTT
   POLICY --> MQTT
+  PREFS --> MQTT
   MQTT --> WIFI
   WIFI --> BROKER
 

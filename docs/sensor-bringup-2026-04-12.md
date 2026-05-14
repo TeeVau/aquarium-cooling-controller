@@ -1,5 +1,11 @@
 # Sensor Bring-Up - 2026-04-12
 
+> Historical note:
+> This bring-up note records the original two-sensor bench wiring and ROM-ID
+> validation session. The active firmware architecture later dropped the air
+> sensor from the control path and now only requires the fixed water sensor for
+> normal operation.
+
 ## Ergebnis
 
 Zwei DS18B20 erfolgreich am Controller erkannt und fest per ROM-ID zugeordnet.
