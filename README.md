@@ -298,6 +298,18 @@ and verifies `availability=online` plus the target `firmware_version` after
 reboot. It follows the same credential storage convention as
 `tools/mqtt-client.ps1`.
 
+For the currently deployed 120-liter installation, the conservative FHEM
+history profile uses targeted event throttling only on slow trend readings:
+
+```text
+attr AquariumCooling event-on-change-reading .*
+attr AquariumCooling event-min-interval water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300
+attr AquariumCooling DbLogInclude water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
+```
+
+This keeps long-running DBLog volume low without suppressing short-lived fault,
+availability, or controller-mode events.
+
 Upload the controller after a successful build:
 
 ```powershell

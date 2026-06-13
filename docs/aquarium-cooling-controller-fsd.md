@@ -640,6 +640,15 @@ trend history stays compact. `controller_mode`, `fan_fault`, `alarm_code`,
 `fault_severity`, `fault_response`, and `availability` should remain
 event-driven in DBLog so relevant state changes are retained immediately.
 
+A more conservative field profile may extend this approach by applying
+`event-min-interval` only to those same slow trend readings, for example
+`water_temp_c:1800`, `target_temp_c:86400`, and `fan_pwm_percent:300`, while
+still leaving `controller_mode`, `fan_fault`, `alarm_code`, `fault_severity`,
+`fault_response`, and `availability` unthrottled. A blanket
+`event-min-interval .*:...` policy should be avoided for the production device
+because it can hide short-lived fault, reconnect, or mode-transition events
+from FHEM and DBLog.
+
 Detailed fan and plausibility readings may be enabled temporarily for targeted
 debug campaigns and removed again afterward.
 
@@ -897,7 +906,7 @@ runtime command input.
 | AT-06 | Installed staged water-only control | Run controller in actual aquarium installation through light and dark phases | Water remains inside the accepted operating band with materially reduced fan runtime and no air-driven overcooling |
 | AT-07 | OTA success path | Run `tools/ota-upload.ps1` against a newer valid `.bin` firmware image from the local network | Firmware uploads, validates, reboots, returns to MQTT `availability=online`, and reports the new `firmware_version` |
 | AT-08 | OTA failure rollback | Interrupt upload or upload an invalid `.bin` image during update test | Device preserves current working firmware and reports failure |
-| AT-09 | DBLog minimal profile | Export long-running FHEM/DBLog data with the documented include list | Core water, fan-state, fault, and availability analysis remains possible without logging high-volume diagnostic detail topics |
+| AT-09 | DBLog minimal profile | Export long-running FHEM/DBLog data with the documented include list and, if used, targeted `event-min-interval` only on the slow trend readings | Core water, fan-state, fault, and availability analysis remains possible without logging high-volume diagnostic detail topics or suppressing relevant fault/mode events |
 | AT-10 | Release versioning and changelog | Inspect a release candidate before publication | Firmware version follows SemVer 2.0.0 and `CHANGELOG.md` follows Keep a Changelog with a matching release entry |
 | AT-11 | MQTT hybrid cadence | Run production firmware with stable temperatures, then trigger a mode change, a fault-state change, and a valid remote setting update | A full telemetry snapshot is published every 60 seconds during steady state, while the documented controller/fault events and accepted remote settings trigger immediate additional publishes |
 
@@ -944,8 +953,8 @@ Status interpretation in this matrix:
 | FR-4.7 | Must | AT-08 | Implemented |
 | FR-4.8 | Should | AT-07, AT-08 | Implemented |
 | FR-4.9 | Should | AT-05 | Planned |
-| FR-4.10 | Must | AT-11 | Implemented |
-| FR-4.11 | Must | AT-11 | Implemented |
+| FR-4.10 | Must | AT-11 | Bench-verified |
+| FR-4.11 | Must | AT-11 | Bench-verified |
 | NFR-1.1 | Must | AT-01 | Bench-verified |
 | NFR-1.2 | Must | TC-P2-02, TC-P2-03, AT-06 | Planned |
 | NFR-1.3 | Must | TC-P2-05, AT-02 | Bench-verified |
@@ -959,7 +968,7 @@ Status interpretation in this matrix:
 | NFR-1.11 | Must | AT-07, AT-08 | Bench-verified |
 | NFR-1.12 | Must | AT-10 | Planned |
 | NFR-1.13 | Must | AT-10 | Planned |
-| NFR-1.14 | Should | AT-09, AT-11 | Implemented |
+| NFR-1.14 | Should | AT-09, AT-11 | Bench-verified |
 
 ## 9. Troubleshooting Guide
 

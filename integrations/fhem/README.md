@@ -142,8 +142,8 @@ details are better enabled only temporarily for focused debug campaigns.
 
 The production firmware now publishes a complete MQTT telemetry snapshot every
 60 seconds by default. Important controller and fault-state changes are still
-published immediately, so FHEM keeps timely visibility without receiving a
-full repeated snapshot every 10 seconds.
+published immediately, so FHEM keeps timely visibility without receiving the
+former 10-second full-repeat cadence.
 
 ### Suggested FHEM Configuration
 
@@ -170,6 +170,21 @@ the database. Leave `controller_mode`, `fan_fault`, `alarm_code`,
 state changes are recorded immediately. With the firmware's 60-second baseline
 publish cadence, this profile stays compact while still preserving the relevant
 temperature trend for a thermally sluggish 120-liter aquarium.
+
+For an even more conservative long-running field profile, the currently tested
+installation uses:
+
+```text
+attr AquariumCooling event-on-change-reading .*
+attr AquariumCooling event-min-interval water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300
+attr AquariumCooling DbLogInclude water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
+```
+
+This variant intentionally throttles only the slow trend readings while leaving
+fault, mode, and availability events unthrottled. Avoid a blanket
+`event-min-interval .*:...` rule for this device if you want short-lived
+faults, reconnects, or mode changes to remain visible in the FHEM event stream
+and in DBLog.
 
 For a temporary fan-debug campaign, extend the device-side include list
 temporarily with:

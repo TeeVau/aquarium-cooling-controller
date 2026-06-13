@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Increased the default MQTT full-snapshot interval from `10 s` to `60 s` for
   the 120-liter production aquarium and added immediate extra publishes for
   controller/fault state changes and accepted remote configuration updates.
+- Documented the conservative field-tested FHEM history profile using targeted
+  `event-min-interval` only on slow trend readings plus the matching
+  `DbLogInclude` selection.
 - Updated README, FSD, FHEM integration docs, and design diagrams to the staged
   water-only architecture.
 - Improved the FHEM MQTT2 device presentation for firmware `0.1.6` with a
