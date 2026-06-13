@@ -94,6 +94,8 @@ Still intentionally open:
 - longer real-aquarium live data capture for the water-only control strategy
 - longer real-aquarium live data capture after the first 2 h installed run
 - FHEM/DB logging completeness review for long-running aquarium analysis
+- decide whether the observed live-tuned `45 / 60` staged cooling point should
+  be promoted from field configuration into the checked-in defaults
 
 ## Features
 
@@ -516,6 +518,8 @@ Useful artifacts:
 - [docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-fhem-export.csv](docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-fhem-export.csv)
 - [docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-summary.md](docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-summary.md)
 - [docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-fhem-export.csv](docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-fhem-export.csv)
+- [docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-summary.md](docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-summary.md)
+- [docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-fhem-export.csv](docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-fhem-export.csv)
 - [integrations/fhem/README.md](integrations/fhem/README.md)
 - [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
 - [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
