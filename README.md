@@ -59,7 +59,7 @@ The repository currently contains both:
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
 Latest released firmware: `0.1.5`.
-Current source version: `0.1.6`.
+Current source version: `0.1.7`.
 
 Implemented and bench-verified:
 
@@ -94,8 +94,7 @@ Still intentionally open:
 - longer real-aquarium live data capture for the water-only control strategy
 - longer real-aquarium live data capture after the first 2 h installed run
 - FHEM/DB logging completeness review for long-running aquarium analysis
-- decide whether the observed live-tuned `45 / 60` staged cooling point should
-  be promoted from field configuration into the checked-in defaults
+- capture a longer follow-up run with the promoted `45 / 60` staged defaults
 
 ## Features
 
@@ -105,6 +104,8 @@ Implemented now:
 - Fan characterization sketch for the selected 4-pin PWM fan
 - Measured fan curve reused in production firmware
 - Water-only staged hysteresis control with default target `23.0 C`
+- Field-proven default staged cooling levels of `45%` low and `60%` high in
+  the current source configuration
 - Fixed DS18B20 role mapping by ROM ID instead of bus order
 - Target temperature persistence across reboot
 - Persisted staged control configuration across reboot

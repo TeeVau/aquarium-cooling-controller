@@ -952,8 +952,8 @@ Status interpretation in this matrix:
 | Water target delta to enter cooling | +0.5 C |
 | Water target delta to leave cooling | -0.5 C |
 | Water target delta to enter `fan-high` | +1.0 C |
-| Fixed `fan-low` cooling PWM | 22 % |
-| Fixed `fan-high` cooling PWM | 35 % |
+| Fixed `fan-low` cooling PWM | 45 % |
+| Fixed `fan-high` cooling PWM | 60 % |
 
 ### C. Default Naming
 

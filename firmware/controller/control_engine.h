@@ -107,10 +107,10 @@ constexpr ControlConfig kDefaultControlConfig = {
     1.0f,
     15,
     60,
-    22,
+    45,
     20,
     100,
-    35,
+    60,
 };
 
 namespace ControlEngine {

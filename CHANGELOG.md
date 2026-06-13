@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   profile.
 - Added archived live-test exports and summaries for the first `18%` and later
   `22%` water-only controller generations.
+- Added an archived 30-day staged-control tuning export that documents the
+  transition from `22 / 35` defaults to the later `45 / 60` field baseline.
 
 ### Changed
 
@@ -30,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Improved the FHEM MQTT2 device presentation for firmware `0.1.6` with a
   reading-driven `devStateIcon`, a compact status line, and documented use of
   built-in FHEM SVG icons without custom assets.
+- Promoted the observed field-tuned staged cooling levels from `22 / 35` to
+  `45 / 60` as the checked-in source defaults for firmware `0.1.7`.
 
 ## [0.1.4] - 2026-05-01
 

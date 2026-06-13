@@ -62,13 +62,13 @@ stateDiagram-v2
     note right of FanLow
       ControlEngine mode: fan-low
       final_pwm = fan_low_pwm_percent
-      default low stage = 22%
+      default low stage = 45%
     end note
 
     note right of FanHigh
       ControlEngine mode: fan-high
       final_pwm = fan_high_pwm_percent
-      default high stage = 35%
+      default high stage = 60%
     end note
 
     note right of WaterFallback
