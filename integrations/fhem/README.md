@@ -140,6 +140,11 @@ small. The recommended baseline is:
 Detailed RPM/plausibility topics, OTA detail readings, and remote-config status
 details are better enabled only temporarily for focused debug campaigns.
 
+The production firmware now publishes a complete MQTT telemetry snapshot every
+60 seconds by default. Important controller and fault-state changes are still
+published immediately, so FHEM keeps timely visibility without receiving a
+full repeated snapshot every 10 seconds.
+
 ### Suggested FHEM Configuration
 
 If your DbLog device is named `LogDB`, a practical minimal setup is:
@@ -162,7 +167,9 @@ The `:300` suffix on the slower trend readings is a good starting point for a
 120-liter tank. Changed values still get logged; unchanged values do not flood
 the database. Leave `controller_mode`, `fan_fault`, `alarm_code`,
 `fault_severity`, `fault_response`, and `availability` without an interval so
-state changes are recorded immediately.
+state changes are recorded immediately. With the firmware's 60-second baseline
+publish cadence, this profile stays compact while still preserving the relevant
+temperature trend for a thermally sluggish 120-liter aquarium.
 
 For a temporary fan-debug campaign, extend the device-side include list
 temporarily with:

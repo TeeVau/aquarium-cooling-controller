@@ -21,7 +21,7 @@ param(
     [Alias("Server")]
     [string]$BrokerHost = $env:AQ_MQTT_HOST,
 
-    [int]$Port = $(if ($env:AQ_MQTT_PORT) { [int]$env:AQ_MQTT_PORT } else { 1883 }),
+    [int]$Port = $(if ($env:AQ_MQTT_PORT) { [int]$env:AQ_MQTT_PORT } else { 0 }),
 
     [string]$RootTopic = $(if ($env:AQ_MQTT_ROOT_TOPIC) { $env:AQ_MQTT_ROOT_TOPIC } else { "aquarium/cooling" }),
 
@@ -100,6 +100,67 @@ function Read-MqttCredential {
 
     $promptPassword = Read-Host "MQTT password" -AsSecureString
     [pscredential]::new($promptUsername, $promptPassword)
+}
+
+function Get-ConfigMacroValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$MacroName
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+
+    $pattern = '^\s*#define\s+' + [regex]::Escape($MacroName) + '\s+(.+?)\s*$'
+    $matches = @(Select-String -Path $Path -Pattern $pattern)
+    if ($matches.Count -eq 0) {
+        return $null
+    }
+
+    $rawValue = $matches[-1].Matches[0].Groups[1].Value.Trim()
+    if ($rawValue.StartsWith('"') -and $rawValue.EndsWith('"')) {
+        return $rawValue.Trim('"')
+    }
+
+    return $rawValue
+}
+
+function Resolve-ConfigValue {
+    param(
+        [AllowEmptyString()][string]$CurrentValue,
+        [Parameter(Mandatory = $true)][string]$MacroName,
+        [Parameter(Mandatory = $true)][string[]]$ConfigPaths,
+        [string]$FallbackValue = ""
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($CurrentValue)) {
+        return $CurrentValue
+    }
+
+    foreach ($configPath in $ConfigPaths) {
+        $value = Get-ConfigMacroValue -Path $configPath -MacroName $MacroName
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            return $value
+        }
+    }
+
+    return $FallbackValue
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$configPaths = @(
+    (Join-Path $repoRoot "firmware/controller/network_config.local.h"),
+    (Join-Path $repoRoot "firmware/controller/network_config.h")
+)
+
+$BrokerHost = Resolve-ConfigValue -CurrentValue $BrokerHost -MacroName "AQ_MQTT_HOST" -ConfigPaths $configPaths
+$RootTopic = Resolve-ConfigValue -CurrentValue $RootTopic -MacroName "AQ_MQTT_ROOT_TOPIC" -ConfigPaths $configPaths -FallbackValue "aquarium/cooling"
+$Username = Resolve-ConfigValue -CurrentValue $Username -MacroName "AQ_MQTT_USERNAME" -ConfigPaths $configPaths
+
+if ($Port -le 0) {
+    $resolvedPortText = Resolve-ConfigValue -CurrentValue "" -MacroName "AQ_MQTT_PORT" -ConfigPaths $configPaths -FallbackValue "1883"
+    $Port = [int]$resolvedPortText
 }
 
 $credentialPath = Get-CredentialStorePath -Name $CredentialName

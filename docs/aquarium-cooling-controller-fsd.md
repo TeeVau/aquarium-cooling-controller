@@ -281,29 +281,35 @@ Scope:
   client
 - Accept validated remote configuration updates for the supported simplified
   control surface
+- Use a slower regular MQTT publish cadence suitable for a thermally sluggish
+  120-liter aquarium while still surfacing important state changes immediately
 - Keep local control fully autonomous during network outages
 
 Current implementation note: Wi-Fi/MQTT publish telemetry and network
 diagnostics are implemented and verified against the local MQTT broker.
-Manual BIN-only OTA upload is implemented and now also verified on the fully
-wired controller hardware, including MQTT-triggered OTA enable and MQTT
-publication of the active upload endpoint. The current production firmware uses
-the revised water-driven control architecture; the target-state FSD extends that
-surface to staged cooling and a broader validated MQTT control surface. The
-checked-in FHEM `MQTT2_DEVICE` integration shall be updated in lockstep with the
+Manually enabled BIN-only OTA upload is implemented and now also verified
+through the repository `tools/ota-upload.ps1` workflow on the fully wired
+controller hardware, including MQTT-triggered OTA enable, MQTT publication of
+the active upload endpoint, HTTP upload of the newest versioned BIN from
+`bin/`, and post-reboot verification of `availability=online` plus the target
+`firmware_version`. The current production firmware uses the revised
+water-driven control architecture; the target-state FSD extends that surface to
+staged cooling and a broader validated MQTT control surface. The checked-in
+FHEM `MQTT2_DEVICE` integration shall be updated in lockstep with the
 documented topic set.
 
 Deliverables:
 
 - MQTT topic implementation
 - BIN-only OTA upload workflow
-- Telemetry and status publishing
+- Telemetry and status publishing with hybrid periodic/event-driven behavior
 - FHEM monitoring integration for current MQTT telemetry
 - Validated remote settings workflow
 
 Exit criteria:
 
-- MQTT publishes required state and diagnostics
+- MQTT publishes required state and diagnostics with a 60-second baseline
+  snapshot cadence plus immediate publishes for controller/fault changes
 - OTA firmware image can be uploaded locally, validated, and applied over Wi-Fi
 - Approved remote settings are persisted
 - Network loss does not interrupt cooling autonomy
@@ -382,7 +388,7 @@ Dependencies:
 
 - FR-4.1 [Must]: The production controller shall publish water temperature, fan
   PWM, fan RPM, target temperature, active staged-control parameters,
-  controller mode, and fault status over MQTT.
+  controller mode, and fault status over MQTT as a regular full snapshot.
 - FR-4.2 [Must]: The production controller shall accept validated remote
   updates for target temperature and all supported normal controller parameters
   over MQTT, validate each requested change against the complete resulting
@@ -408,6 +414,13 @@ Dependencies:
   integration definition for the current MQTT telemetry surface and validated
   remote settings. The current FHEM `MQTT2_DEVICE` definition covers the
   documented readings plus the supported remote set commands.
+- FR-4.10 [Must]: The production controller shall use a default regular MQTT
+  full-snapshot interval of 60 seconds for the 120-liter production aquarium
+  profile.
+- FR-4.11 [Must]: The production controller shall publish an immediate extra
+  MQTT snapshot when controller mode, commanded fan PWM, fan fault, alarm code,
+  fault severity, fault response, water-sensor health, degraded-cooling state,
+  or service-required state changes.
 
 ### 4.2 Non-Functional Requirements (NFR)
 
@@ -440,6 +453,9 @@ Dependencies:
 - NFR-1.13 [Must]: The repository shall maintain release history in
   `CHANGELOG.md` using the Keep a Changelog structure, including an
   `Unreleased` section and grouped notable changes for each released version.
+- NFR-1.14 [Should]: Production telemetry and FHEM long-running history should
+  remain operationally useful without producing unnecessary repeated data for
+  the thermally sluggish 120-liter aquarium.
 
 ### 4.3 Constraints
 
@@ -481,6 +497,9 @@ Dependencies:
   simplified production strategy (assumed from the logged aquarium trials).
 - OTA uploads will be performed from a trusted client on the same local network
   during a short, explicitly enabled maintenance window (assumed).
+- A 60-second regular MQTT snapshot interval is sufficient for the 120-liter
+  aquarium because the water mass changes thermally much more slowly than the
+  local 2-second control loop (assumed).
 
 ### External Dependencies
 
@@ -569,6 +588,13 @@ configuration file.
 | `aquarium/cooling/set/fan_high_pwm_percent` | subscribe | Remote fixed PWM for `fan-high` |
 | `aquarium/cooling/set/ota_enable` | subscribe | Open or cancel the temporary OTA maintenance window |
 
+The production firmware shall publish a complete telemetry snapshot at a
+60-second default interval. Accepted remote-configuration changes and changes to
+`controller_mode`, `fan_pwm_percent`, `fan_fault`, `alarm_code`,
+`fault_severity`, `fault_response`, `water_sensor_ok`, `cooling_degraded`, and
+`service_required` shall trigger an immediate additional publish without
+waiting for the next baseline interval.
+
 #### FHEM MQTT2 Monitoring Integration
 
 The repository includes a FHEM `MQTT2_DEVICE` definition at:
@@ -586,7 +612,7 @@ plus OTA maintenance-window control. The file uses the verified bench root topic
 #### FHEM / DBLog Minimal Profile
 
 For long-running database logging, the default profile shall remain deliberately
-small and focus on tuning plus basis fault visibility.
+small and focus on tuning plus basic fault visibility.
 
 Recommended permanent DBLog readings:
 
@@ -607,6 +633,12 @@ default:
 - OTA detail readings
 - remote-config diagnostic details
 - any air-sensor-related telemetry
+
+For the 120-liter production aquarium, `water_temp_c`, `target_temp_c`, and
+`fan_pwm_percent` should use a 300-second DBLog interval suffix so long-running
+trend history stays compact. `controller_mode`, `fan_fault`, `alarm_code`,
+`fault_severity`, `fault_response`, and `availability` should remain
+event-driven in DBLog so relevant state changes are retained immediately.
 
 Detailed fan and plausibility readings may be enabled temporarily for targeted
 debug campaigns and removed again afterward.
@@ -749,11 +781,21 @@ runtime command input.
    powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
    ```
 
-8. Flash production firmware after control and fault parameters are finalized.
-9. Verify the temporary BIN-only OTA upload path after Wi-Fi integration is
-   available.
-10. Treat `.arduino-build/` as the canonical working build path and `build/`
-    as the canonical export/log directory. The sketch-local
+8. For normal OTA delivery without USB, flash production firmware with:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
+   ```
+
+9. Use `tools/mqtt-client.ps1` for normal broker-side MQTT inspection or
+   control, and reserve direct `mosquitto_pub.exe` / `mosquitto_sub.exe`
+   troubleshooting for raw client debugging only.
+10. Treat `.arduino-build/esp32_esp32_esp32/` as the canonical working build
+    path, including board-scoped `logs/` and `output/`.
+11. Treat `bin/` as the canonical release-artifact directory for versioned
+    firmware BIN files.
+12. Treat `build/` as a bench-side ad-hoc output directory for local serial
+    captures and similar temporary artifacts. The sketch-local
     `firmware/controller/build/` directory is an ignored Arduino tooling
     artifact and may be deleted at any time.
 
@@ -778,8 +820,11 @@ runtime command input.
 4. Apply the resulting fixed PWM command for the active state.
 5. Allow settling time after PWM changes before plausibility evaluation.
 6. Measure fan RPM and evaluate plausibility where valid.
-7. Publish telemetry and accept validated remote settings when connected.
-8. Keep OTA upload disabled unless an operator explicitly opens the maintenance
+7. Publish a full telemetry snapshot every 60 seconds by default and accept
+   validated remote settings when connected.
+8. Publish an immediate extra telemetry snapshot when a documented
+   controller-mode, PWM, or fault-policy event state changes.
+9. Keep OTA upload disabled unless an operator explicitly opens the maintenance
    window while local control remains active.
 
 ### Maintenance Procedures
@@ -850,10 +895,11 @@ runtime command input.
 | AT-04 | Remote configuration safety | Publish valid and invalid set commands for each supported parameter | Valid values apply immediately, persist, and remain consistent; invalid values are rejected without overwriting the last valid persisted settings |
 | AT-05 | FHEM MQTT2 integration | Import the FHEM definition against the configured broker/root topic | FHEM receives the expected telemetry readings and can issue only the documented validated set commands for the controller parameters and OTA control |
 | AT-06 | Installed staged water-only control | Run controller in actual aquarium installation through light and dark phases | Water remains inside the accepted operating band with materially reduced fan runtime and no air-driven overcooling |
-| AT-07 | OTA success path | Enable the OTA maintenance window and upload a newer valid `.bin` firmware image from the local network | Firmware uploads, validates, activates, and reports success |
+| AT-07 | OTA success path | Run `tools/ota-upload.ps1` against a newer valid `.bin` firmware image from the local network | Firmware uploads, validates, reboots, returns to MQTT `availability=online`, and reports the new `firmware_version` |
 | AT-08 | OTA failure rollback | Interrupt upload or upload an invalid `.bin` image during update test | Device preserves current working firmware and reports failure |
 | AT-09 | DBLog minimal profile | Export long-running FHEM/DBLog data with the documented include list | Core water, fan-state, fault, and availability analysis remains possible without logging high-volume diagnostic detail topics |
 | AT-10 | Release versioning and changelog | Inspect a release candidate before publication | Firmware version follows SemVer 2.0.0 and `CHANGELOG.md` follows Keep a Changelog with a matching release entry |
+| AT-11 | MQTT hybrid cadence | Run production firmware with stable temperatures, then trigger a mode change, a fault-state change, and a valid remote setting update | A full telemetry snapshot is published every 60 seconds during steady state, while the documented controller/fault events and accepted remote settings trigger immediate additional publishes |
 
 ### 8.4 Traceability Matrix
 
@@ -898,6 +944,8 @@ Status interpretation in this matrix:
 | FR-4.7 | Must | AT-08 | Implemented |
 | FR-4.8 | Should | AT-07, AT-08 | Implemented |
 | FR-4.9 | Should | AT-05 | Planned |
+| FR-4.10 | Must | AT-11 | Implemented |
+| FR-4.11 | Must | AT-11 | Implemented |
 | NFR-1.1 | Must | AT-01 | Bench-verified |
 | NFR-1.2 | Must | TC-P2-02, TC-P2-03, AT-06 | Planned |
 | NFR-1.3 | Must | TC-P2-05, AT-02 | Bench-verified |
@@ -911,6 +959,7 @@ Status interpretation in this matrix:
 | NFR-1.11 | Must | AT-07, AT-08 | Bench-verified |
 | NFR-1.12 | Must | AT-10 | Planned |
 | NFR-1.13 | Must | AT-10 | Planned |
+| NFR-1.14 | Should | AT-09, AT-11 | Implemented |
 
 ## 9. Troubleshooting Guide
 
@@ -996,9 +1045,17 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 - `powershell -ExecutionPolicy Bypass -File .\tools\build.ps1` is the canonical
   repository build entrypoint for firmware compilation and artifact export.
 - `.arduino-build/esp32_esp32_esp32/` is the canonical working build path used
-  by the repository build script.
-- `build/` is the canonical location for exported firmware binaries, merged
-  images, and local serial or bench-capture logs.
+  by the repository build script, including board-scoped `logs/` and `output/`
+  directories.
+- `powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1` is the
+  canonical repository entrypoint for normal MQTT reads and writes.
+- `powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1` is the
+  canonical repository entrypoint for OTA flashing when no USB-connected ESP is
+  in use.
+- `bin/` is the canonical location for versioned exported firmware binaries
+  created by `tools/build.ps1`.
+- `build/` is reserved for local serial or bench-capture logs and other ad-hoc
+  temporary outputs.
 - `firmware/controller/build/` is a sketch-local Arduino tooling artifact
   directory that may contain duplicated binaries and `build.options.json`.
 - The sketch-local `firmware/controller/build/` tree is ignored by Git and may

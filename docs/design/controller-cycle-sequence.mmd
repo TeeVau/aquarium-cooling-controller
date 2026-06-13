@@ -59,8 +59,11 @@ sequenceDiagram
 
             Main->>Serial: printDiagnostics()
             Main->>MQTT: publishTelemetry(force=false)
-            alt MQTT connected and publish interval elapsed, 10000 ms
+            alt MQTT connected and publish interval elapsed, 60000 ms
                 MQTT->>Broker: publish state, diagnostics, and status topics
+            else MQTT connected and event state changed
+                Main->>MQTT: publishTelemetry(force=true)
+                MQTT->>Broker: publish immediate controller/fault update
             else not connected or interval not elapsed
                 MQTT-->>Main: skip telemetry publish
             end

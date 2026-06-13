@@ -21,12 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `22%` water-only controller generations.
 - Added an archived 30-day staged-control tuning export that documents the
   transition from `22 / 35` defaults to the later `45 / 60` field baseline.
+- Added `tools/ota-upload.ps1` as the repository-standard OTA flashing
+  entrypoint for MQTT-triggered maintenance-window enable, upload-URL
+  discovery, HTTP BIN upload, and post-reboot MQTT verification.
 
 ### Changed
 
 - Removed the active air-sensor control path from the current firmware,
   simplified the tracked sensor model to a fixed water sensor, and reduced the
   fault model accordingly.
+- Increased the default MQTT full-snapshot interval from `10 s` to `60 s` for
+  the 120-liter production aquarium and added immediate extra publishes for
+  controller/fault state changes and accepted remote configuration updates.
 - Updated README, FSD, FHEM integration docs, and design diagrams to the staged
   water-only architecture.
 - Improved the FHEM MQTT2 device presentation for firmware `0.1.6` with a
@@ -34,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   built-in FHEM SVG icons without custom assets.
 - Promoted the observed field-tuned staged cooling levels from `22 / 35` to
   `45 / 60` as the checked-in source defaults for firmware `0.1.7`.
+- Standardized the repository build and OTA workflow on `tools/build.ps1`,
+  `tools/mqtt-client.ps1`, and `tools/ota-upload.ps1`, including board-scoped
+  `.arduino-build/` logs/output, versioned `bin/` firmware exports, and
+  MQTT-driven OTA validation against the live controller.
+- Advanced the checked-in production firmware version to `0.1.9` and verified
+  the script-driven OTA upgrade path end to end on the fully wired controller
+  hardware.
 
 ## [0.1.4] - 2026-05-01
 

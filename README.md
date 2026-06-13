@@ -59,7 +59,7 @@ The repository currently contains both:
 The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
 
 Latest released firmware: `0.1.5`.
-Current source version: `0.1.7`.
+Current source version: `0.1.9`.
 
 Implemented and bench-verified:
 
@@ -85,8 +85,8 @@ Implemented and broker-verified:
 - validated MQTT remote configuration for staged control parameters and OTA
   maintenance mode control
 - OTA maintenance-window activation and cancellation over MQTT
-- manually enabled BIN-only OTA upload with live validation on the fully wired
-  controller hardware
+- script-driven BIN-only OTA upload with MQTT-based URL discovery, HTTP upload,
+  and post-reboot verification on the fully wired controller hardware
 - MQTT publication of both the controller IP and the active OTA upload URL
 
 Still intentionally open:
@@ -222,6 +222,7 @@ Key files:
 - FHEM MQTT2 device definition: [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg)
 - Serial capture helper: [tools/serial-capture.ps1](tools/serial-capture.ps1)
 - MQTT client helper: [tools/mqtt-client.ps1](tools/mqtt-client.ps1)
+- OTA upload helper: [tools/ota-upload.ps1](tools/ota-upload.ps1)
 - MQTT telemetry notes: [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
 
 ## Software Dependencies
@@ -284,6 +285,18 @@ Fallback troubleshooting command if you need to call `arduino-cli` directly:
 
 Direct `arduino-cli` calls may still hit Windows `Arduino15` or Codex sandbox
 permission issues, so prefer `tools/build.ps1` for normal work.
+
+Flash over OTA after a successful build:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
+```
+
+The OTA script resolves the newest versioned BIN from `bin/`, enables the OTA
+window over MQTT, waits for the published `/update` URL, uploads the firmware,
+and verifies `availability=online` plus the target `firmware_version` after
+reboot. It follows the same credential storage convention as
+`tools/mqtt-client.ps1`.
 
 Upload the controller after a successful build:
 
@@ -448,18 +461,26 @@ fault-policy values, MQTT availability, and remote-config feedback topics. It
 also exposes a `setList` for the validated staged control parameters and OTA
 maintenance-window control. Local cooling on the ESP32 remains authoritative.
 
-For a broker-driven OTA workflow:
+Preferred broker-driven OTA workflow:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
+```
+
+Manual fallback if you need to troubleshoot the raw steps:
 
 1. Publish `true` to `/set/ota_enable`.
 2. Read `/status/ota_upload_url` until it reports `http://<ip>/update`.
 3. Upload the compiled firmware binary to that published URL.
+4. Verify that `/status/availability` returns to `online` and
+   `/status/firmware_version` matches the uploaded BIN version.
 
 Example:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode pub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/set/ota_enable' -Message 'true'
 powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/status/ota_upload_url' -Count 1
-curl.exe -s -S -i -F firmware=@bin\aq-cooling-controller-0.1.4.bin http://<published-ip>/update
+curl.exe -s -S -i -F firmware=@bin\aq-cooling-controller-<version>.bin http://<published-ip>/update
 ```
 
 The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.

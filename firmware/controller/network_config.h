@@ -61,7 +61,7 @@
 #endif
 
 #ifndef AQ_MQTT_PUBLISH_INTERVAL_MS
-#define AQ_MQTT_PUBLISH_INTERVAL_MS 10000UL
+#define AQ_MQTT_PUBLISH_INTERVAL_MS 60000UL
 #endif
 
 #if __has_include("network_config.local.h")

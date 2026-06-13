@@ -128,7 +128,7 @@ flowchart LR
 
   subgraph NET["Optional network telemetry"]
     WIFI["Wi-Fi station<br/>10 s reconnect interval"]
-    MQTT["MqttTelemetry<br/>10 s publish interval<br/>availability last will"]
+    MQTT["MqttTelemetry<br/>60 s full snapshot +<br/>immediate event publish<br/>availability last will"]
     BROKER["MQTT broker / FHEM<br/>state, diagnostics, status topics"]
   end
 
@@ -228,8 +228,11 @@ sequenceDiagram
 
             Main->>Serial: printDiagnostics()
             Main->>MQTT: publishTelemetry(force=false)
-            alt MQTT connected and publish interval elapsed, 10000 ms
+            alt MQTT connected and publish interval elapsed, 60000 ms
                 MQTT->>Broker: publish state, diagnostics, and status topics
+            else MQTT connected and event state changed
+                Main->>MQTT: publishTelemetry(force=true)
+                MQTT->>Broker: publish immediate controller/fault update
             else not connected or interval not elapsed
                 MQTT-->>Main: skip telemetry publish
             end

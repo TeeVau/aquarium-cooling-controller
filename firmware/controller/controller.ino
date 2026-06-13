@@ -65,7 +65,7 @@
 
 namespace {
 
-#define AQ_FIRMWARE_VERSION "0.1.7"
+#define AQ_FIRMWARE_VERSION "0.1.9"
 
 constexpr char kFirmwareName[] = "aq-cooling-controller";
 constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
@@ -143,6 +143,47 @@ char serialCommandBuffer[kSerialCommandBufferSize] = {};
 size_t serialCommandLength = 0;
 char mqttNetworkIpBuffer[kNetworkIpBufferSize] = "unavailable";
 char mqttOtaUploadUrlBuffer[kOtaUploadUrlBufferSize] = "unavailable";
+struct TelemetryEventState {
+  ControlMode controlMode;
+  uint8_t fanPwmPercent;
+  bool fanFault;
+  AlarmCode alarmCode;
+  FaultSeverity faultSeverity;
+  FaultResponse faultResponse;
+  bool waterSensorOk;
+  bool coolingDegraded;
+  bool serviceRequired;
+};
+TelemetryEventState lastPublishedTelemetryEventState = {};
+bool lastPublishedTelemetryEventStateValid = false;
+
+TelemetryEventState buildTelemetryEventState(const ControlSnapshot& controlSnapshot,
+                                             const FaultMonitorSnapshot& faultSnapshot,
+                                             const FaultPolicySnapshot& policySnapshot) {
+  return {
+      controlSnapshot.mode,
+      controlSnapshot.finalPwmPercent,
+      faultSnapshot.faultLatched,
+      policySnapshot.alarmCode,
+      policySnapshot.severity,
+      policySnapshot.response,
+      policySnapshot.waterSensorOk,
+      policySnapshot.coolingDegraded,
+      policySnapshot.serviceRequired,
+  };
+}
+
+bool telemetryEventStateEquals(const TelemetryEventState& lhs,
+                               const TelemetryEventState& rhs) {
+  return lhs.controlMode == rhs.controlMode &&
+         lhs.fanPwmPercent == rhs.fanPwmPercent && lhs.fanFault == rhs.fanFault &&
+         lhs.alarmCode == rhs.alarmCode &&
+         lhs.faultSeverity == rhs.faultSeverity &&
+         lhs.faultResponse == rhs.faultResponse &&
+         lhs.waterSensorOk == rhs.waterSensorOk &&
+         lhs.coolingDegraded == rhs.coolingDegraded &&
+         lhs.serviceRequired == rhs.serviceRequired;
+}
 
 void printHelp() {
   Serial.println("Serial commands:");
@@ -254,6 +295,15 @@ void syncOtaTelemetrySnapshot() {
 
 void requestTelemetryPublish() {
   telemetryPublishRequested = true;
+}
+
+void markTelemetryPublishSuccessful(const ControlSnapshot& controlSnapshot,
+                                    const FaultMonitorSnapshot& faultSnapshot,
+                                    const FaultPolicySnapshot& policySnapshot) {
+  lastPublishedTelemetryEventState =
+      buildTelemetryEventState(controlSnapshot, faultSnapshot, policySnapshot);
+  lastPublishedTelemetryEventStateValid = true;
+  telemetryPublishRequested = false;
 }
 
 void setRemoteConfigStatus(bool accepted, const char* key, const char* detail) {
@@ -1259,7 +1309,9 @@ void loop() {
                                                           remoteConfigStatus,
                                                           true);
     if (published) {
-      telemetryPublishRequested = false;
+      markTelemetryPublishSuccessful(lastControlSnapshot,
+                                     lastFaultSnapshot,
+                                     lastFaultPolicySnapshot);
     }
   }
 
@@ -1274,16 +1326,31 @@ void loop() {
   lastFaultPolicySnapshot = FaultPolicy::evaluate(lastControlSnapshot, lastFaultSnapshot);
   lastFaultSnapshotValid = true;
 
+  const TelemetryEventState currentTelemetryEventState =
+      buildTelemetryEventState(lastControlSnapshot,
+                               lastFaultSnapshot,
+                               lastFaultPolicySnapshot);
+  if (lastPublishedTelemetryEventStateValid &&
+      !telemetryEventStateEquals(currentTelemetryEventState,
+                                 lastPublishedTelemetryEventState)) {
+    requestTelemetryPublish();
+  }
+
   printDiagnostics(lastFaultSnapshot,
                    lastFaultPolicySnapshot,
                    rpmMonitor.sampleAgeMs(nowMs),
                    nowMs);
-  mqttTelemetry.publishTelemetry(nowMs,
-                                 lastControlSnapshot,
-                                 runtimeControlConfig,
-                                 otaTelemetrySnapshot,
-                                 lastFaultSnapshot,
-                                 lastFaultPolicySnapshot,
-                                 remoteConfigStatus,
-                                 false);
+  const bool published = mqttTelemetry.publishTelemetry(nowMs,
+                                                        lastControlSnapshot,
+                                                        runtimeControlConfig,
+                                                        otaTelemetrySnapshot,
+                                                        lastFaultSnapshot,
+                                                        lastFaultPolicySnapshot,
+                                                        remoteConfigStatus,
+                                                        false);
+  if (published) {
+    markTelemetryPublishSuccessful(lastControlSnapshot,
+                                   lastFaultSnapshot,
+                                   lastFaultPolicySnapshot);
+  }
 }
