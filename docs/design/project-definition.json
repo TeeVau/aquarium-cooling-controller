@@ -290,24 +290,27 @@
       ],
       "subscribe": [
         "set target temperature",
-        "optional control flags",
+        "set staged control parameters",
         "optional manual override for service/testing"
       ]
     },
     "topic_structure_proposal": {
       "state": [
         "aquarium/cooling/state/water_temp_c",
-        "aquarium/cooling/state/air_temp_c",
+        "aquarium/cooling/state/target_temp_c",
+        "aquarium/cooling/state/cooling_on_delta_c",
+        "aquarium/cooling/state/cooling_off_delta_c",
+        "aquarium/cooling/state/high_cooling_delta_c",
+        "aquarium/cooling/state/fan_low_pwm_percent",
+        "aquarium/cooling/state/fan_high_pwm_percent",
         "aquarium/cooling/state/fan_pwm_percent",
         "aquarium/cooling/state/fan_rpm",
-        "aquarium/cooling/state/target_temp_c",
         "aquarium/cooling/state/controller_mode"
       ],
       "status": [
         "aquarium/cooling/status/fan_plausible",
         "aquarium/cooling/status/fan_fault",
         "aquarium/cooling/status/water_sensor_ok",
-        "aquarium/cooling/status/air_sensor_ok",
         "aquarium/cooling/status/cooling_degraded",
         "aquarium/cooling/status/service_required",
         "aquarium/cooling/status/alarm_code",

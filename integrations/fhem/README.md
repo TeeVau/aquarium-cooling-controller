@@ -171,6 +171,37 @@ temporarily with:
 fan_rpm,expected_rpm,rpm_tolerance,rpm_error,plausibility_active,fan_plausible
 ```
 
+## Legacy Topic Cleanup
+
+If an installed controller has already gone through the older air-assist and
+dual-sensor firmware generations, legacy MQTT retained topics can survive on
+the broker even after the current water-only firmware is running.
+
+Typical leftovers are:
+
+- `air_sensor_ok`
+- `air_assist_enable`
+- `air_min_pwm_percent`
+
+These are no longer part of the active firmware telemetry surface. If they
+still appear in broker subscriptions or old FHEM readings, clear the retained
+topics once on the broker side:
+
+```text
+mosquitto_pub -h <broker-host> -t aquarium_cooling/status/air_sensor_ok -r -n
+mosquitto_pub -h <broker-host> -t aquarium_cooling/state/air_assist_enable -r -n
+mosquitto_pub -h <broker-host> -t aquarium_cooling/state/air_min_pwm_percent -r -n
+```
+
+Afterwards, remove stale historical readings from the FHEM device if they are
+still shown in the UI:
+
+```text
+deletereading <device-name> air_sensor_ok
+deletereading <device-name> air_assist_enable
+deletereading <device-name> air_min_pwm_percent
+```
+
 ## Troubleshooting
 
 If readings do not update, first compare the firmware's reported root topic
