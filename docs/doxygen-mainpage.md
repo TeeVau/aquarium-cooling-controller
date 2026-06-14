@@ -35,7 +35,7 @@ This Doxygen site focuses on source-level API documentation.
 
 The firmware follows the standard Arduino lifecycle:
 
-- `setup()` initializes serial diagnostics, preferences, sensors, fan PWM, RPM
+- `setup()` configures serial diagnostics, preferences, sensors, fan PWM, RPM
   sampling, and telemetry.
 - `loop()` remains non-blocking and repeatedly advances sensor sampling, control
   calculation, PWM output, RPM measurement, fault evaluation, diagnostics, and

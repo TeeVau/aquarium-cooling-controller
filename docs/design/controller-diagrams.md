@@ -3,8 +3,8 @@
 These Mermaid diagrams document the current controller firmware behavior in
 `firmware/controller`.
 
-The Mermaid source files below are the current source of truth. The rendered
-SVG/PNG artifacts may lag behind until they are regenerated.
+The Mermaid source files below are the source of truth. The rendered SVG/PNG
+artifacts are generated from the same sources for offline viewing.
 
 The diagrams are also available as standalone `.mmd` files for draw.io /
 diagrams.net imports:
@@ -187,7 +187,7 @@ sequenceDiagram
         Serial-->>Main: optional command effects
 
         Main->>Sensors: update(nowMs)
-        alt first boot or no known sensors
+        alt cold boot or no known sensors
             Sensors->>Sensors: discover ROM IDs on shared 1-Wire bus
             Sensors->>Sensors: request temperature conversion
         else conversion pending and ready

@@ -4,7 +4,7 @@
     "type": "embedded-iot",
     "language": "Arduino/C++",
     "platform": "ESP32",
-    "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
+    "purpose": "Aquarium cooling controller with local autonomous fan control, DS18B20 water-temperature sensing, PWM fan drive, tachometer monitoring, Wi-Fi and MQTT integration",
     "primary_goal": "Control aquarium water temperature by evaporative cooling using a 4-pin PWM fan, with all critical control logic running locally on the ESP32",
     "secondary_goal": "Keep the installed controller simple, quiet, and serviceable while using MQTT and OTA only as non-critical observability and maintenance tools",
     "project_status": "released water-only controller firmware with persisted target temperature, local fault policy, broker-verified MQTT telemetry, MQTT-triggered OTA endpoint discovery, validated BIN-only OTA upload on the fully wired controller, and documented FHEM MQTT2 integration"
@@ -26,7 +26,7 @@
     ],
     "constraints": [
       "System only cools, no heating",
-      "No local display or buttons are planned",
+      "No local button interface is part of the current release",
       "MQTT may change the target temperature and the temporary OTA maintenance-window state",
       "Persisted remote settings must survive reboot and across Wi-Fi/MQTT outages",
       "Critical control must never depend on MQTT or Wi-Fi availability",
@@ -66,10 +66,9 @@
     },
     "temperature_sensors": {
       "type": "DS18B20",
-      "count": 2,
+      "count": 1,
       "roles": [
-        "water_temperature",
-        "air_temperature"
+        "water_temperature"
       ],
       "wiring_model": "Shared 1-Wire bus",
       "assignment_rule": "Sensors must be identified by ROM ID, not by bus order",
@@ -107,7 +106,6 @@
     "control_partitioning": {
       "critical_local_functions": [
         "Read water temperature",
-        "Read air temperature",
         "Load persisted configuration",
         "Compute cooling command",
         "Drive fan PWM",
@@ -124,12 +122,12 @@
     },
     "operating_principle": {
       "main_control_variable": "water_temperature",
-      "secondary_control_variable": "air_temperature",
-      "fan_command_logic": "final_pwm = max(water_based_pwm, air_based_min_pwm)",
-      "control_modes_planned": [
-        "auto",
-        "manual_override_optional",
-        "fault_mode"
+      "fan_command_logic": "staged water-only hysteresis selects fan-off, fan-low, fan-high, or water-sensor-fallback",
+      "control_modes_current": [
+        "fan-off",
+        "fan-low",
+        "fan-high",
+        "water-sensor-fallback"
       ]
     },
     "persistence": {
@@ -137,11 +135,11 @@
       "must_persist": [
         "target_c",
         "target_set",
-        "air_en",
-        "air_en_set",
-        "air_min_pwm",
-        "air_min_set",
-        "future: optional additional controller parameters"
+        "cool_on",
+        "cool_off",
+        "cool_high",
+        "fan_low",
+        "fan_high"
       ],
       "boot_behavior": [
         "Load persisted values at startup",
@@ -161,12 +159,7 @@
         "Further above target: gradually increase PWM",
         "Critical temperature range: high PWM / emergency behavior"
       ],
-      "note": "Bench-ready mapping is implemented; final tuning should use live aquarium data"
-    },
-    "air_assist": {
-      "purpose": "Remove hot air trapped under the lid due to the LED lighting",
-      "behavior": "Apply a minimum fan PWM when air temperature exceeds configured thresholds",
-      "priority": "Secondary to water cooling, but combined by max() logic"
+      "note": "Current release defaults use 45% low stage and 60% high stage"
     },
     "noise_priority": {
       "policy": "Prefer quieter fan behavior over maximum cooling performance where safe",
@@ -201,14 +194,14 @@
       "settle_time_ms": 3000,
       "rpm_sample_time_ms": 1000,
       "samples_per_curve_point": 4,
-      "start_threshold_rpm_initial": 150,
+      "start_threshold_rpm": 150,
       "stable_samples_required": 3
     },
     "serial_output_requirements": [
       "Human-readable progress log",
       "Summary of start PWM and hold PWM",
       "Curve as readable table",
-      "Curve as C array initializer for reuse in production code"
+      "Curve as C array literal for reuse in production code"
     ],
     "test_sketch_scope": [
       "No MQTT required",
@@ -235,7 +228,7 @@
       "evaluation_rule": "Measured RPM must stay within expected RPM ± configured tolerance"
     },
     "tolerance_policy": {
-      "initial_strategy": "Use a fixed starting tolerance (example: ±12%) and refine after measurements",
+      "baseline_strategy": "Use a fixed starting tolerance (example: ±12%) and refine after measurements",
       "note": "Very low PWM region may need wider tolerance or exclusion from plausibility checking"
     },
     "enable_conditions": [
@@ -244,8 +237,8 @@
       "Use multiple consecutive mismatches before latching a fault"
     ],
     "fault_confirmation": {
-      "mismatch_cycles_required_initial": 3,
-      "match_cycles_required_for_recovery_initial": 3
+      "mismatch_cycles_required": 3,
+      "match_cycles_required_for_recovery": 3
     },
     "desired_diagnostics": [
       "expected_rpm",
@@ -260,10 +253,7 @@
     "philosophy": "Local fail-safe behavior must protect cooling autonomy and surface real hardware faults",
     "water_sensor_failure": {
       "policy": "Enter fault handling because primary control variable is unavailable",
-      "initial_recommendation": "Drive fan to a defined safe fallback PWM and raise an alarm"
-    },
-    "air_sensor_failure": {
-      "policy": "Continue water-based cooling control, report air-sensor fault, and keep airflow decisions dependent only on the water-driven controller state"
+      "release_recommendation": "Drive fan to a defined safe fallback PWM and raise an alarm"
     },
     "fan_plausibility_failure": {
       "policy": "Treat as fan fault",
@@ -276,11 +266,10 @@
     }
   },
   "mqtt": {
-    "design_status": "MQTT telemetry is implemented and broker-verified; validated remote configuration for selected settings is implemented in firmware; manual BIN-only OTA upload is implemented and bench-verified",
+    "design_status": "MQTT telemetry, validated remote configuration, and manual BIN-only OTA upload are implemented and verified on the installed controller",
     "functional_requirements": {
       "publish": [
         "water temperature",
-        "air temperature",
         "fan RPM",
         "fan PWM",
         "target temperature",
@@ -346,7 +335,6 @@
       "normal_topics_observed": 20,
       "verified_states": [
         "normal telemetry",
-        "air sensor fault telemetry",
         "water sensor fault telemetry",
         "fan fault telemetry",
         "fault recovery telemetry"
@@ -366,7 +354,7 @@
       "documentation_file": "integrations/fhem/README.md",
       "device_type": "MQTT2_DEVICE",
       "current_scope": [
-        "Display water and air temperature",
+      "Display water temperature",
         "Display target temperature, fan PWM, and fan RPM",
         "Display RPM plausibility diagnostics",
         "Display fault policy state and MQTT availability",

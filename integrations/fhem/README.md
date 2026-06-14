@@ -1,87 +1,42 @@
 # FHEM MQTT2 Integration
 
-This directory contains the FHEM definition for observing the aquarium cooling
-controller and sending validated staged-control settings through MQTT.
+This directory contains a pasteable FHEM `MQTT2_DEVICE` definition for the
+Aquarium Cooling Controller.
 
-The checked-in visual presentation is aligned with the current firmware source
-version `0.1.6` and uses only SVG icons that are already shipped with standard
-FHEM icon paths.
+The checked-in configuration is based on the current running installation:
 
-## Current Scope
+- FHEM device name: `wz_AquariumCooling`
+- MQTT client / server IODev: `myBroker`
+- Room: `Wohnzimmer`
+- Topic root: `aquarium_cooling`
+- Release: `0.2.0`
 
-The target control surface publishes controller state, diagnostics,
-availability, and fault-policy readings, and it subscribes to a validated
-`/set/...` surface for:
-
-- `target_temp_c`
-- `cooling_on_delta_c`
-- `cooling_off_delta_c`
-- `high_cooling_delta_c`
-- `fan_low_pwm_percent`
-- `fan_high_pwm_percent`
-- `ota_enable`
-
-Local cooling on the ESP32 remains authoritative. FHEM is allowed to adjust
-only these validated persisted settings.
+The committed template keeps portable placeholder names such as
+`AquariumCooling` and `MQTT2_BROKER`; replace them with your local device names
+before importing if needed.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `aquarium-cooling-mqtt2-device.cfg` | Pasteable FHEM `MQTT2_DEVICE` definition for telemetry plus the validated `setList` |
-
-## Visual State Mapping
-
-The `MQTT2_DEVICE` definition includes:
-
-- a fixed device `icon` using a standard FHEM SVG
-- a reading-driven Perl `devStateIcon`
-- a compact `stateFormat` for the textual status
-
-The icon priority is intentionally strict:
-
-1. MQTT availability
-2. OTA state while `ota_window_active=true`
-3. critical fault/alarm state
-4. degraded or fallback state
-5. normal cooling mode
-
-Completed or timed-out OTA end states remain available in the dedicated OTA
-readings, but they no longer override the main device icon once the OTA window
-is closed.
-
-For firmware `0.1.6`, the normal-mode mapping assumes:
-
-- `fan-off` => ready/idle
-- `fan-low` => active low-stage cooling
-- `fan-high` => active high-stage cooling
-- `water-sensor-fallback` => fallback/warning state
-
-Older pre-`0.1.6` controller-mode labels are intentionally not visualized in
-the checked-in config.
-
-## Prerequisites
-
-- FHEM with either `MQTT2_SERVER` or `MQTT2_CLIENT`
-- A working MQTT broker connection
-- Controller firmware configured with Wi-Fi and MQTT credentials
-- Matching MQTT root topic between firmware and FHEM
-
-The checked-in FHEM definition uses the verified bench root topic
-`aquarium_cooling`. The committed firmware default is `aquarium/cooling`.
-Adjust the topic root in the FHEM file if your `network_config.local.h` uses a
-different value.
+| `aquarium-cooling-mqtt2-device.cfg` | Pasteable FHEM `MQTT2_DEVICE` template with readings, status display, DBLog profile, and validated set commands |
 
 ## Installation
 
-1. Ensure the controller publishes telemetry to the broker.
-2. In FHEM, create or reuse an MQTT2 IO device for the broker.
-3. Paste the content of `aquarium-cooling-mqtt2-device.cfg` into FHEM.
-4. Replace `MQTT2_BROKER` with the actual IODev name if needed.
-5. Replace `aquarium_cooling` with your configured MQTT root topic if needed.
-6. Save the FHEM configuration.
+1. Ensure the controller publishes MQTT telemetry.
+2. Create or reuse an FHEM `MQTT2_CLIENT` or `MQTT2_SERVER`.
+3. Import `aquarium-cooling-mqtt2-device.cfg`.
+4. Replace `MQTT2_BROKER` with your FHEM MQTT IODev name.
+5. Replace `aquarium_cooling` if your firmware uses another MQTT root topic.
+6. Adjust `room`, `group`, and device name to your FHEM setup.
+7. Save the FHEM configuration.
 
-Expected readings include:
+## Readings
+
+The template maps the controller's MQTT state, diagnostic, status, OTA, and
+remote-configuration topics to FHEM readings.
+
+Core readings for normal operation:
 
 - `water_temp_c`
 - `target_temp_c`
@@ -93,10 +48,6 @@ Expected readings include:
 - `fan_pwm_percent`
 - `fan_rpm`
 - `controller_mode`
-- `expected_rpm`
-- `rpm_tolerance`
-- `rpm_error`
-- `plausibility_active`
 - `fan_plausible`
 - `fan_fault`
 - `water_sensor_ok`
@@ -105,131 +56,129 @@ Expected readings include:
 - `alarm_code`
 - `fault_severity`
 - `fault_response`
+- `firmware_version`
+- `network_ip`
+- `availability`
+
+Maintenance and configuration readings:
+
+- `ota_state`
+- `ota_message`
+- `ota_window_active`
+- `ota_upload_url`
 - `remote_config_last_result`
 - `remote_config_last_key`
 - `remote_config_last_detail`
 - `remote_config_accept_count`
 - `remote_config_reject_count`
-- `firmware_version`
-- `network_ip`
-- `ota_state`
-- `ota_message`
-- `ota_window_active`
-- `ota_upload_url`
-- `availability`
 
-Displayed temperature readings now arrive from the firmware already rounded to
-one decimal place. This is only an output-formatting change; the controller
-keeps full floating-point precision internally.
+Detailed RPM plausibility readings are included for visibility but are not part
+of the default DBLog include list:
 
-## Recommended DBLog Profile
+- `expected_rpm`
+- `rpm_tolerance`
+- `rpm_error`
+- `plausibility_active`
 
-For permanent long-running DBLog retention, keep the include list deliberately
-small. The recommended baseline is:
+## Status Display
 
-- `water_temp_c`
-- `target_temp_c`
-- `fan_pwm_percent`
-- `controller_mode`
-- `fan_fault`
-- `alarm_code`
-- `fault_severity`
-- `fault_response`
-- `availability`
+The template sets both `stateFormat` and `devStateIcon`.
 
-Detailed RPM/plausibility topics, OTA detail readings, and remote-config status
-details are better enabled only temporarily for focused debug campaigns.
+Priority order:
 
-The production firmware now publishes a complete MQTT telemetry snapshot every
-60 seconds by default. Important controller and fault-state changes are still
-published immediately, so FHEM keeps timely visibility without receiving the
-former 10-second full-repeat cadence.
+1. MQTT offline state.
+2. Active OTA upload window.
+3. Critical alarm, fan fault, or water-sensor fault.
+4. Degraded or fallback cooling state.
+5. Normal cooling mode.
 
-### Suggested FHEM Configuration
-
-If your DbLog device is named `LogDB`, a practical minimal setup is:
+The visible state line follows this shape:
 
 ```text
-attr LogDB DbLogSelectionMode Include
-attr AquariumCooling DbLogInclude water_temp_c:300,target_temp_c:300,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
+Kuehlt | Wasser 24.1 C | Ziel 24.0 C | Luefter 45 % | MQTT online
 ```
 
-This keeps the long-running database focused on:
+The template uses standard FHEM icons only.
 
-- water temperature trend
-- effective target
-- commanded fan activity
-- state transitions
-- fault history
-- MQTT availability
+## Set Commands
 
-The `:300` suffix on the slower trend readings is a good starting point for a
-120-liter tank. Changed values still get logged; unchanged values do not flood
-the database. Leave `controller_mode`, `fan_fault`, `alarm_code`,
-`fault_severity`, `fault_response`, and `availability` without an interval so
-state changes are recorded immediately. With the firmware's 60-second baseline
-publish cadence, this profile stays compact while still preserving the relevant
-temperature trend for a thermally sluggish 120-liter aquarium.
+FHEM can send validated MQTT settings to the controller:
 
-For an even more conservative long-running field profile, the currently tested
-installation uses:
+| Set command | Meaning |
+|---|---|
+| `target_temp_c` | Target water temperature |
+| `cooling_on_delta_c` | Delta above target that starts cooling |
+| `cooling_off_delta_c` | Delta below target that stops cooling |
+| `high_cooling_delta_c` | Delta above target that selects `fan-high` |
+| `fan_low_pwm_percent` | Fixed PWM for `fan-low` |
+| `fan_high_pwm_percent` | Fixed PWM for `fan-high` |
+| `ota_enable` | `true` opens, `false` cancels the OTA window |
+
+Local control on the ESP32 remains authoritative. Invalid values are rejected
+by the firmware and reported through the `remote_config_*` readings.
+
+## DBLog Profile
+
+The field-tested profile for the running 120-liter aquarium is:
 
 ```text
 attr AquariumCooling event-on-change-reading .*
-attr AquariumCooling event-min-interval water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300
+attr AquariumCooling event-min-interval .*:1800
 attr AquariumCooling DbLogInclude water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
 ```
 
-This variant intentionally throttles only the slow trend readings while leaving
-fault, mode, and availability events unthrottled. Avoid a blanket
-`event-min-interval .*:...` rule for this device if you want short-lived
-faults, reconnects, or mode changes to remain visible in the FHEM event stream
-and in DBLog.
+This keeps long-running database growth under control while retaining the core
+signals needed to understand water temperature, target, fan activity, operating
+mode, fault state, and MQTT availability.
 
-For a temporary fan-debug campaign, extend the device-side include list
-temporarily with:
+For temporary fan diagnostics, extend the DBLog include list with:
 
 ```text
 fan_rpm,expected_rpm,rpm_tolerance,rpm_error,plausibility_active,fan_plausible
 ```
 
-## Legacy Topic Cleanup
+Remove those detailed readings again after the diagnostic window to keep the
+long-term history compact.
 
-If an installed controller has already gone through the older air-assist and
-dual-sensor firmware generations, legacy MQTT retained topics can survive on
-the broker even after the current water-only firmware is running.
+## Topic Root
 
-Typical leftovers are:
-
-- `air_sensor_ok`
-- `air_assist_enable`
-- `air_min_pwm_percent`
-
-These are no longer part of the active firmware telemetry surface. If they
-still appear in broker subscriptions or old FHEM readings, clear the retained
-topics once on the broker side:
+The template uses:
 
 ```text
-mosquitto_pub -h <broker-host> -t aquarium_cooling/status/air_sensor_ok -r -n
-mosquitto_pub -h <broker-host> -t aquarium_cooling/state/air_assist_enable -r -n
-mosquitto_pub -h <broker-host> -t aquarium_cooling/state/air_min_pwm_percent -r -n
+aquarium_cooling
 ```
 
-Afterwards, remove stale historical readings from the FHEM device if they are
-still shown in the UI:
+The firmware default is:
 
 ```text
-deletereading <device-name> air_sensor_ok
-deletereading <device-name> air_assist_enable
-deletereading <device-name> air_min_pwm_percent
+aquarium/cooling
 ```
+
+Use the serial `network` command to check which root topic your controller is
+publishing, then keep the firmware and FHEM `readingList` / `setList` aligned.
 
 ## Troubleshooting
 
-If readings do not update, first compare the firmware's reported root topic
-from the serial `network` command with the topic root in the FHEM
-`readingList`.
+If readings do not update:
 
-If the device remains offline in FHEM while the controller works locally, check
-the broker IODev, subscriptions, MQTT credentials, and whether retained
-availability messages are present on `<root>/status/availability`.
+- Check that `IODev` points to the active FHEM MQTT device.
+- Compare the serial `network` topic root with the FHEM topic root.
+- Confirm `<root>/status/availability` is published as `online`.
+- Confirm broker credentials and subscriptions.
+
+If set commands do not apply:
+
+- Check `remote_config_last_result`.
+- Check `remote_config_last_key`.
+- Check `remote_config_last_detail`.
+- Verify the value is inside the firmware validation range.
+
+If OTA does not start from FHEM:
+
+- Set `ota_enable` to `true`.
+- Watch `ota_window_active`, `ota_state`, and `ota_upload_url`.
+- Prefer the repository OTA script for actual firmware uploads:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
+```

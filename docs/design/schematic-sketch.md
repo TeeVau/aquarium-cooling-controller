@@ -1,11 +1,10 @@
 # Schematic Sketch
 
-This is a first block-level schematic sketch for the aquarium cooling
-controller.
+This is the block-level wiring sketch for the aquarium cooling controller.
 
 The updated version shows the central 3D-printed enclosure, the preferred rear
 upper mounting position near the lighting area, and the terminal-block based
-wiring concept for fan, water sensor, and air sensor.
+wiring concept for the fan and water sensor.
 
 ## Use in draw.io
 
@@ -16,16 +15,12 @@ wiring concept for fan, water sensor, and air sensor.
 
 ## Notes
 
-- This is a wiring/block sketch, not yet a production-ready electrical
-  schematic.
-- The fan PWM interface stage is intentionally marked as `TBD` because the
-  exact electrical compatibility with the selected 4-pin fan still needs
-  prototype validation.
-- DS18B20 water and air sensors share one 1-Wire bus on GPIO33 with a 3.3 kOhm
-  pull-up to 3.3 V in the verified bench setup.
+- This is a wiring/block sketch, not a detailed PCB schematic.
+- The DS18B20 water sensor uses the 1-Wire bus on GPIO33 with a 3.3 kOhm
+  pull-up to 3.3 V.
 - Fan PWM is currently assigned to GPIO25.
 - Tach input is currently assigned to GPIO26 and uses a 3.3 kOhm pull-up to
-  3.3 V in the verified bench setup.
+  3.3 V.
 - Common ground between ESP32, fan, and 12 V fan supply is required for
   correct PWM and TACH behavior.
 - Fan power stays on 12 V, while the ESP32 is supplied through a buck

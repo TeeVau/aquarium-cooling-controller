@@ -1,163 +1,60 @@
 # Aquarium Cooling Controller
 
-[![Status](https://img.shields.io/badge/status-bench--verified-brightgreen)](https://github.com/TeeVau/aquarium-cooling-controller)
+[![Status](https://img.shields.io/badge/status-release--ready-brightgreen)](https://github.com/TeeVau/aquarium-cooling-controller)
 [![Platform](https://img.shields.io/badge/platform-ESP32-blue)](https://github.com/TeeVau/aquarium-cooling-controller)
 [![Firmware](https://img.shields.io/badge/firmware-Arduino-green)](https://github.com/TeeVau/aquarium-cooling-controller/tree/main/firmware)
-[![Control](https://img.shields.io/badge/control-local-important)](https://github.com/TeeVau/aquarium-cooling-controller)
 [![Release](https://img.shields.io/github/v/release/TeeVau/aquarium-cooling-controller)](https://github.com/TeeVau/aquarium-cooling-controller/releases)
 [![License](https://img.shields.io/github/license/TeeVau/aquarium-cooling-controller)](https://github.com/TeeVau/aquarium-cooling-controller/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f)](https://teevau.github.io/aquarium-cooling-controller/)
-[![Pages Workflow](https://img.shields.io/github/actions/workflow/status/TeeVau/aquarium-cooling-controller/doxygen-pages.yml?branch=main&label=pages)](https://github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml)
 
-ESP32-based aquarium cooling controller for a covered tank with local autonomous fan control, a water-temperature DS18B20 on a shared 1-Wire bus, tach-based fan plausibility monitoring, and broker-verified MQTT telemetry.
+ESP32 firmware for autonomous aquarium cooling with a 4-pin PWM fan, one
+DS18B20 water-temperature sensor, MQTT telemetry, FHEM integration, and
+broker-driven OTA updates.
 
 ![Aquarium Cooling Controller hero preview](docs/assets/github-social-preview.png)
 
-## Quick Start
+## What It Does
 
-1. Read the [functional specification](docs/aquarium-cooling-controller-fsd.md) for system goals and constraints.
-2. Open [firmware/controller/controller.ino](firmware/controller/controller.ino) in Arduino IDE 2.x or build it from the repo root with `powershell -ExecutionPolicy Bypass -File .\tools\build.ps1`.
-3. Install `OneWire`, `DallasTemperature`, and `PubSubClient`.
-4. Flash the controller and verify the serial `status` output at `115200` baud.
-5. For release artifacts, release notes, and tagged versions, use the [GitHub Releases page](https://github.com/TeeVau/aquarium-cooling-controller/releases).
-6. For source-level firmware documentation, open the [GitHub Pages API docs](https://teevau.github.io/aquarium-cooling-controller/).
+The controller keeps cooling decisions local on the ESP32. Wi-Fi, MQTT, FHEM,
+and OTA are useful for monitoring and maintenance, but cooling continues even
+when the network is unavailable.
 
-## Table of Contents
+Current release: `0.2.0`.
 
-- [Quick Start](#quick-start)
-- [Overview](#overview)
-- [Current Status](#current-status)
-- [Features](#features)
-- [Hardware](#hardware)
-- [Wiring and Pin Mapping](#wiring-and-pin-mapping)
-- [Repository Layout](#repository-layout)
-- [Software Dependencies](#software-dependencies)
-- [Build and Flash](#build-and-flash)
-- [Usage](#usage)
-- [Bench Results](#bench-results)
-- [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
-- [Project Links](#project-links)
+Main capabilities:
 
-## Overview
-
-This project controls aquarium cooling with a 4-pin PWM fan and one fixed DS18B20 water sensor as the main control variable.
-
-The main design rule is that cooling must continue to work locally on the ESP32 even when Wi-Fi, MQTT, or OTA services are unavailable. The controller therefore keeps sensing, target validation, PWM generation, RPM measurement, and fault handling on the device itself.
-
-The repository currently contains both:
-
-- a completed fan-characterization workflow for the selected Noctua fan
-- a released local controller firmware with water-only staged hysteresis control,
-  persisted runtime configuration, fault policy, broker-verified MQTT telemetry,
-  and validated OTA over Wi-Fi
-
-## Current Status
-
-The project has moved beyond pure bring-up and now has a usable first controller firmware on real hardware.
-
-Latest released firmware: `0.1.5`.
-Current source version: `0.1.9`.
-
-Implemented and bench-verified:
-
-- PWM fan drive on the real output pin
-- tachometer RPM measurement
-- start-boost for reliable fan startup
-- measured PWM-to-RPM interpolation for plausibility checks
-- shared 1-Wire bus on `GPIO33`
-- fixed ROM-ID assignment for the water sensor
-- local water-only staged hysteresis control
-- target temperature persistence in ESP32 Preferences / NVS
-- strict default and fallback target temperature of `23.0 C`
-- serial diagnostics with sensor, fan, and alarm information
-- verified local fault policy for water sensor, tach, and RPM deviation failures
-
-Implemented and broker-verified:
-
-- non-blocking Wi-Fi connection management
-- MQTT telemetry publishing with `PubSubClient`
-- local secret override via ignored `network_config.local.h`
-- broker-side normal telemetry capture
-- broker-side fault telemetry for water sensor and fan-fault cases
-- validated MQTT remote configuration for staged control parameters and OTA
-  maintenance mode control
-- OTA maintenance-window activation and cancellation over MQTT
-- script-driven BIN-only OTA upload with MQTT-based URL discovery, HTTP upload,
-  and post-reboot verification on the fully wired controller hardware
-- MQTT publication of both the controller IP and the active OTA upload URL
-
-Still intentionally open:
-
-- longer real-aquarium live data capture for the water-only control strategy
-- longer real-aquarium live data capture after the first 2 h installed run
-- FHEM/DB logging completeness review for long-running aquarium analysis
-- capture a longer follow-up run with the promoted `45 / 60` staged defaults
-
-## Features
-
-Implemented now:
-
-- Local autonomous control on ESP32 without network dependency
-- Fan characterization sketch for the selected 4-pin PWM fan
-- Measured fan curve reused in production firmware
-- Water-only staged hysteresis control with default target `23.0 C`
-- Field-proven default staged cooling levels of `45%` low and `60%` high in
-  the current source configuration
-- Fixed DS18B20 role mapping by ROM ID instead of bus order
-- Target temperature persistence across reboot
-- Persisted staged control configuration across reboot
-- Safe fallback to `23.0 C` for invalid or missing target values
-- Tach plausibility diagnostics against the measured fan curve
-- Central fault-policy model with alarm severity and response labels
-- Hardware-verified fault responses for sensor failures and fan plausibility faults
-- Wi-Fi/MQTT telemetry that does not block local cooling
-- Validated MQTT remote configuration for target temperature, staged control
-  parameters, and OTA enable
-- Manually enabled BIN-only OTA firmware upload over Wi-Fi
-- MQTT publication of firmware version, controller IP, and active OTA upload URL
-- Serial service commands for diagnostics and bench operation
-
-Planned next:
-
-- longer aquarium-side live data capture with the released water-only strategy
-- FHEM/DB logging completeness for long-term analysis
-- optional local temperature display
+- Water-temperature based staged fan control.
+- Default target temperature: `23.0 C`.
+- Default fan stages: `45%` for `fan-low`, `60%` for `fan-high`.
+- Persistent target and staged-control settings in ESP32 Preferences / NVS.
+- Fixed DS18B20 water-sensor assignment by ROM ID.
+- Fan RPM monitoring with tach-based plausibility checks.
+- MQTT telemetry for state, diagnostics, fault state, OTA state, and availability.
+- Validated MQTT remote settings for target temperature, hysteresis, fan stages,
+  and OTA enable/disable.
+- FHEM `MQTT2_DEVICE` definition with status display, readings, set commands,
+  and DBLog profile.
+- BIN-only OTA update workflow through `tools/ota-upload.ps1`.
 
 ## Hardware
 
-Bench hardware used so far:
+| Component | Purpose | Notes |
+|---|---|---|
+| ESP32 DevKit / ESP32-WROOM class board | Main controller | Built with FQBN `esp32:esp32:esp32` |
+| Noctua NF-S12A PWM or compatible 4-pin PWM fan | Cooling actuator | 12 V fan supply |
+| DS18B20 waterproof sensor | Water temperature | Current ROM: `28333844050000CB` |
+| 12 V power supply | Fan power | Common ground with ESP32 is required |
+| 12 V to 5 V buck converter | ESP32 supply | Recommended for an installed controller |
+| `3.3 kOhm` pull-up | 1-Wire bus | DATA to `3.3 V` |
+| `3.3 kOhm` pull-up | Tach input | TACH to `3.3 V` |
 
-| Component | Quantity | Purpose | Notes |
-|---|---:|---|---|
-| ESP32 Dev Board | 1 | Main controller | Bench-tested with `esp32:esp32:esp32` |
-| Noctua NF-S12A PWM | 1 | Cooling actuator | 120 mm 4-pin PWM fan |
-| DS18B20 | 1 | Water temperature sensing | Shared 1-Wire bus |
-| 12 V supply | 1 | Fan power | Common ground with ESP32 is mandatory |
-| `3.3 kOhm` pull-up | 1 | Tach input biasing | To `3.3 V` |
-| `3.3 kOhm` pull-up | 1 | 1-Wire bus biasing | To `3.3 V` |
-
-Planned production hardware concept:
-
-| Component | Role |
-|---|---|
-| ESP32-WROOM-32E / DevKitC-class board | Main controller |
-| USB-C PD trigger board | Single-cable 12 V input |
-| 12 V to 5 V buck converter | ESP32 supply |
-| 3D-printed enclosure | Centralized electronics housing |
-| Terminal blocks | Fan and sensor wiring termination |
-
-## Wiring and Pin Mapping
-
-Current bench mapping:
+## Wiring
 
 | Function | ESP32 GPIO | Notes |
 |---|---:|---|
 | Fan PWM | 25 | 25 kHz PWM output |
 | Fan TACH | 26 | Tach input with `3.3 kOhm` pull-up |
-| 1-Wire bus | 33 | Shared DS18B20 bus with `3.3 kOhm` pull-up |
+| 1-Wire DATA | 33 | DS18B20 bus with `3.3 kOhm` pull-up |
 
 Fan connector reference:
 
@@ -165,10 +62,10 @@ Fan connector reference:
 |---|---|---|---|
 | 1 | GND | Black | Common GND |
 | 2 | +12 V | Yellow | 12 V fan supply |
-| 3 | TACH | Green | ESP32 tach input |
-| 4 | PWM | Blue | ESP32 PWM output stage |
+| 3 | TACH | Green | ESP32 GPIO26 |
+| 4 | PWM | Blue | ESP32 GPIO25 |
 
-Verified DS18B20 cable colors for the currently used potted sensors:
+Known cable colors for the currently used potted DS18B20 sensor:
 
 | Sensor Wire | Function |
 |---|---|
@@ -176,71 +73,15 @@ Verified DS18B20 cable colors for the currently used potted sensors:
 | `gelb` | `GND` |
 | `gruen` | `DATA` |
 
-Important notes:
+## Install
 
-- `ESP32 GND`, fan ground, and the `12 V` supply ground must share a common reference.
-- Water sensor ROM: `28333844050000CB`
-- A block-level wiring sketch is available in [docs/design/schematic-sketch.md](docs/design/schematic-sketch.md).
+Required software:
 
-## Repository Layout
-
-```text
-.
-├── docs/
-│   ├── aquarium-live-tests/
-│   ├── assets/
-│   ├── design/
-│   └── result fan test/
-├── firmware/
-│   ├── controller/
-│   └── fan-test/
-├── integrations/
-│   └── fhem/
-└── tools/
-```
-
-What lives where:
-
-| Path | Purpose |
-|---|---|
-| `docs/` | specs, notes, diagrams, and test results |
-| `firmware/controller/` | main ESP32 controller firmware |
-| `firmware/fan-test/` | fan characterization sketch |
-| `integrations/fhem/` | FHEM MQTT integration |
-| `tools/` | helper scripts for local workflow |
-
-Key files:
-
-- FSD: [docs/aquarium-cooling-controller-fsd.md](docs/aquarium-cooling-controller-fsd.md)
-- Sensor bring-up notes: [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
-- Fan measurement summary: [docs/result fan test/measurement-summary-2026-04-12.md](docs/result%20fan%20test/measurement-summary-2026-04-12.md)
-- Controller firmware: [firmware/controller/controller.ino](firmware/controller/controller.ino)
-- Controller diagrams: [docs/design/controller-diagrams.md](docs/design/controller-diagrams.md)
-- Mermaid rendering notes: [docs/design/mermaid-rendering.md](docs/design/mermaid-rendering.md)
-- Fan characterization sketch: [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino)
-- FHEM MQTT2 integration notes: [integrations/fhem/README.md](integrations/fhem/README.md)
-- FHEM MQTT2 device definition: [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg)
-- Serial capture helper: [tools/serial-capture.ps1](tools/serial-capture.ps1)
-- MQTT client helper: [tools/mqtt-client.ps1](tools/mqtt-client.ps1)
-- OTA upload helper: [tools/ota-upload.ps1](tools/ota-upload.ps1)
-- MQTT telemetry notes: [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
-
-## Software Dependencies
-
-Required tools:
-
-- [Arduino IDE](https://www.arduino.cc/en/software) 2.x or compatible `arduino-cli`
-- ESP32 board package for Arduino
-- PowerShell on Windows for the serial and MQTT helper scripts
-- Mosquitto command-line clients for broker-side MQTT verification
-
-Required Arduino libraries:
-
-| Library | Purpose | Install via |
-|---|---|---|
-| `OneWire` | Shared DS18B20 bus transport | Arduino Library Manager |
-| `DallasTemperature` | DS18B20 sensor handling | Arduino Library Manager |
-| `PubSubClient` | MQTT client for ESP32 telemetry | Arduino Library Manager |
+- Arduino IDE 2.x or compatible `arduino-cli`.
+- ESP32 board package for Arduino.
+- Arduino libraries `OneWire`, `DallasTemperature`, and `PubSubClient`.
+- PowerShell on Windows for the repository helper scripts.
+- Mosquitto command-line clients if you use the MQTT helper scripts directly.
 
 Recommended ESP32 board package URL:
 
@@ -248,390 +89,188 @@ Recommended ESP32 board package URL:
 https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 ```
 
-Observed in the latest verified bench run:
-
-- FQBN: `esp32:esp32:esp32`
-- ESP32 Arduino core reported at runtime: `3.3.8`
-
-## Build and Flash
-
-### Arduino IDE
-
-1. Install Arduino IDE 2.x.
-2. Add the ESP32 board package URL in `File -> Preferences`.
-3. Install the `esp32` board package in Boards Manager.
-4. Install `OneWire`, `DallasTemperature`, and `PubSubClient` in the Library Manager.
-5. Open one of these sketches:
-   - `firmware/fan-test/fan-test.ino`
-   - `firmware/controller/controller.ino`
-
-### Arduino CLI
-
-Build the controller with the repository script:
+Build from the repository root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
 ```
 
-The script keeps compile logs and raw Arduino output under the board-specific
-FQBN directory in `.arduino-build/`, copies a versioned firmware BIN to `bin/`,
-and removes the per-run log files again after a successful build.
+The build script resolves Arduino CLI, writes board-scoped build output below
+`.arduino-build/`, and exports a versioned firmware image below `bin/`.
 
-Fallback troubleshooting command if you need to call `arduino-cli` directly:
+## Configure Wi-Fi and MQTT
 
-```powershell
-& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' compile --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' --output-dir '.arduino-build\esp32_esp32_esp32\output' 'firmware/controller'
-```
+1. Copy `firmware/controller/network_config.local.example.h` to
+   `firmware/controller/network_config.local.h`.
+2. Set `AQ_WIFI_SSID`, `AQ_WIFI_PASSWORD`, `AQ_MQTT_HOST`, and optional MQTT
+   credentials.
+3. Keep `network_config.local.h` private; it is ignored by Git.
+4. Build and flash the firmware.
+5. Use the serial `network` command or FHEM readings to verify connectivity.
 
-Direct `arduino-cli` calls may still hit Windows `Arduino15` or Codex sandbox
-permission issues, so prefer `tools/build.ps1` for normal work.
+The committed default MQTT root topic is `aquarium/cooling`. The included FHEM
+template uses the tested local root topic `aquarium_cooling`; change the root
+in the FHEM file if your firmware uses another value.
 
-Flash over OTA after a successful build:
+## OTA Update
+
+After a successful build, flash the installed controller over MQTT-assisted OTA:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
 ```
 
-The OTA script resolves the newest versioned BIN from `bin/`, enables the OTA
-window over MQTT, waits for the published `/update` URL, uploads the firmware,
-and verifies `availability=online` plus the target `firmware_version` after
-reboot. It follows the same credential storage convention as
-`tools/mqtt-client.ps1`.
+The OTA script:
 
-For the currently deployed 120-liter installation, the conservative FHEM
-history profile uses targeted event throttling only on slow trend readings:
+- selects the newest versioned BIN from `bin/`,
+- enables the temporary OTA maintenance window over MQTT,
+- reads the controller-published upload URL,
+- uploads the BIN image,
+- waits for the reboot,
+- verifies MQTT `availability=online`,
+- verifies the reported `firmware_version`.
 
-```text
-attr AquariumCooling event-on-change-reading .*
-attr AquariumCooling event-min-interval water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300
-attr AquariumCooling DbLogInclude water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
-```
+For normal releases, do not pass `-UploadUrl` and do not use manual HTTP upload
+commands. Let the script discover the active OTA endpoint through MQTT.
 
-This keeps long-running DBLog volume low without suppressing short-lived fault,
-availability, or controller-mode events.
+## FHEM Integration
 
-Upload the controller after a successful build:
-
-```powershell
-& 'C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe' upload -p COM3 --fqbn esp32:esp32:esp32 --build-path '.arduino-build\esp32_esp32_esp32' 'firmware/controller'
-```
-
-Capture serial output:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\serial-capture.ps1 -Port COM3 -Baud 115200 -DurationSec 15 -OutputPath 'build\serial-log.txt'
-```
-
-Subscribe to MQTT telemetry with the helper script:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Count 45
-```
-
-Build artifact layout used in this repository:
-
-- `.arduino-build/esp32_esp32_esp32/`: canonical working build path for this FQBN, including the compile work directory plus `logs/` and `output/`; success runs clean up their temporary per-run logs again
-- `build/`: local serial captures and other bench-side ad-hoc outputs
-- `bin/`: versioned firmware release binaries created by `tools/build.ps1`
-- `firmware/controller/build/`: sketch-local Arduino tooling artifact directory created by the ESP32 core; `tools/build.ps1` deletes it again after a successful build
-
-## Usage
-
-### 1. Fan Characterization
-
-Use [firmware/fan-test/fan-test.ino](firmware/fan-test/fan-test.ino) to:
-
-- detect start PWM from standstill
-- detect minimum hold PWM
-- measure the upward and downward PWM-to-RPM curves
-- print reusable curve data for the production controller
-
-### 2. Local Controller
-
-Use [firmware/controller/controller.ino](firmware/controller/controller.ino) for the current controller firmware.
-
-What it does today:
-
-- initializes PWM output, tach measurement, and the 1-Wire bus
-- assigns the water sensor by fixed ROM ID
-- computes local water-only staged hysteresis fan demand
-- persists a user-set target temperature in Preferences / NVS
-- persists remote-configured staged control thresholds and PWM levels in
-  Preferences / NVS
-- falls back to the default target `23.0 C` if the stored or entered target is invalid
-- prints continuous diagnostics including target source, alarm code, sensor health, RPM plausibility, and assigned ROM IDs
-
-Serial monitor:
-
-```text
-115200 baud
-```
-
-Current serial service commands:
-
-| Command | Effect |
-|---|---|
-| `status` | Print diagnostics immediately |
-| `target <c>` | Set and persist a custom target temperature |
-| `default` | Clear the stored target and return to `23.0 C` |
-| `control` | Print the current hysteresis and quiet-cooling defaults |
-| `faults` | Print the current fault-policy defaults |
-| `network` | Print Wi-Fi/MQTT configuration and connection status |
-| `publish` | Publish telemetry immediately when MQTT is connected |
-| `ota status` | Print current OTA upload status |
-| `ota enable` | Open the temporary OTA upload window |
-| `ota cancel` | Close the temporary OTA upload window |
-| `help` | Show the command list |
-
-Example session:
-
-```text
-target 24.5
-status
-default
-```
-
-### 3. MQTT Telemetry
-
-MQTT is optional and non-critical. If Wi-Fi or MQTT is unavailable, local cooling, fan control, sensor handling, and fault policy continue to run on the ESP32.
-
-Committed defaults intentionally contain no secrets. To enable telemetry locally:
-
-1. Copy [network_config.local.example.h](firmware/controller/network_config.local.example.h) to `firmware/controller/network_config.local.h`.
-2. Fill in `AQ_WIFI_SSID`, `AQ_WIFI_PASSWORD`, `AQ_MQTT_HOST`, and optional MQTT credentials.
-3. Compile and flash the controller firmware.
-4. Use the serial command `network` to inspect connection state.
-5. Use `publish` to force a telemetry publish after the first diagnostics cycle.
-
-`network_config.local.h` is ignored by Git and must not be committed.
-
-Published topics use the root `aquarium/cooling` by default. The current local bench setup has also been verified with the configured root `aquarium_cooling`.
-
-| Topic suffix | Payload |
-|---|---|
-| `/state/water_temp_c` | water temperature or `unavailable`, formatted with one decimal place |
-| `/state/target_temp_c` | active target temperature, formatted with one decimal place |
-| `/state/cooling_on_delta_c` | active fan-on delta, formatted with one decimal place |
-| `/state/cooling_off_delta_c` | active fan-off delta, formatted with one decimal place |
-| `/state/high_cooling_delta_c` | active fan-high delta, formatted with one decimal place |
-| `/state/fan_low_pwm_percent` | active fixed PWM for `fan-low` |
-| `/state/fan_high_pwm_percent` | active fixed PWM for `fan-high` |
-| `/state/fan_pwm_percent` | final commanded fan PWM |
-| `/state/fan_rpm` | measured fan RPM |
-| `/state/controller_mode` | local control mode |
-| `/diagnostic/expected_rpm` | interpolated expected RPM |
-| `/diagnostic/rpm_tolerance` | current RPM tolerance |
-| `/diagnostic/rpm_error` | measured minus expected RPM |
-| `/diagnostic/plausibility_active` | whether RPM plausibility is currently active |
-| `/diagnostic/remote_config_accept_count` | count of accepted remote config commands |
-| `/diagnostic/remote_config_reject_count` | count of rejected remote config commands |
-| `/status/fan_plausible` | current plausibility result |
-| `/status/fan_fault` | latched fan fault |
-| `/status/water_sensor_ok` | water sensor health |
-| `/status/alarm_code` | summarized fault code |
-| `/status/fault_severity` | `none`, `warning`, or `critical` |
-| `/status/fault_response` | local fault response |
-| `/status/cooling_degraded` | whether cooling effectiveness is degraded |
-| `/status/service_required` | whether service/operator action is required |
-| `/status/firmware_version` | running firmware version |
-| `/status/network_ip` | current Wi-Fi station IP or `unavailable` |
-| `/status/ota_state` | current OTA upload state |
-| `/status/ota_message` | latest OTA status message |
-| `/status/ota_window_active` | whether the OTA HTTP upload window is active |
-| `/status/ota_upload_url` | active OTA upload URL or `unavailable` |
-| `/status/remote_config_last_result` | `accepted`, `rejected`, or `none` |
-| `/status/remote_config_last_key` | key name of the last remote config command |
-| `/status/remote_config_last_detail` | short apply/reject detail for the last remote config command |
-| `/status/availability` | MQTT last-will availability |
-
-The firmware now also subscribes to these validated remote `/set/...` topics:
-
-| Topic suffix | Payload |
-|---|---|
-| `/set/target_temp_c` | target temperature in Celsius |
-| `/set/cooling_on_delta_c` | fan-on delta in Celsius |
-| `/set/cooling_off_delta_c` | fan-off delta in Celsius |
-| `/set/high_cooling_delta_c` | fan-high delta in Celsius |
-| `/set/fan_low_pwm_percent` | fixed PWM percentage for `fan-low` |
-| `/set/fan_high_pwm_percent` | fixed PWM percentage for `fan-high` |
-| `/set/ota_enable` | `true`/`false` or `1`/`0`; `true` opens the OTA window and `false` cancels it |
-
-Temperature rounding happens only at output boundaries. Internal sensor samples,
-control inputs, and PWM calculations keep full floating-point precision.
-
-### 4. FHEM MQTT2 Integration
-
-The repository includes a ready-to-paste FHEM `MQTT2_DEVICE` definition for
-the current telemetry topics:
+The repository includes a ready-to-import FHEM `MQTT2_DEVICE` definition:
 
 ```text
 integrations/fhem/aquarium-cooling-mqtt2-device.cfg
 ```
 
-The FHEM definition creates readings for the published state, diagnostics,
-fault-policy values, MQTT availability, and remote-config feedback topics. It
-also exposes a `setList` for the validated staged control parameters and OTA
-maintenance-window control. Local cooling on the ESP32 remains authoritative.
+The template creates readings for controller state, diagnostics, fault policy,
+network status, OTA state, and remote-configuration feedback. It also exposes
+validated `setList` controls for:
 
-Preferred broker-driven OTA workflow:
+- `target_temp_c`
+- `cooling_on_delta_c`
+- `cooling_off_delta_c`
+- `high_cooling_delta_c`
+- `fan_low_pwm_percent`
+- `fan_high_pwm_percent`
+- `ota_enable`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
+The current field profile for the 120-liter installation uses:
+
+```text
+attr AquariumCooling event-on-change-reading .*
+attr AquariumCooling event-min-interval .*:1800
+attr AquariumCooling DbLogInclude water_temp_c:1800,target_temp_c:86400,fan_pwm_percent:300,controller_mode,fan_fault,alarm_code,fault_severity,fault_response,availability
 ```
 
-Manual fallback if you need to troubleshoot the raw steps:
+Use the FHEM integration notes for installation and customization:
 
-1. Publish `true` to `/set/ota_enable`.
-2. Read `/status/ota_upload_url` until it reports `http://<ip>/update`.
-3. Upload the compiled firmware binary to that published URL.
-4. Verify that `/status/availability` returns to `online` and
-   `/status/firmware_version` matches the uploaded BIN version.
-
-Example:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode pub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/set/ota_enable' -Message 'true'
-powershell -ExecutionPolicy Bypass -File .\tools\mqtt-client.ps1 -Mode sub -BrokerHost <broker-host> -RootTopic aquarium_cooling -Topic 'aquarium_cooling/status/ota_upload_url' -Count 1
-curl.exe -s -S -i -F firmware=@bin\aq-cooling-controller-<version>.bin http://<published-ip>/update
+```text
+integrations/fhem/README.md
 ```
 
-The checked-in FHEM file uses the verified bench root topic `aquarium_cooling`.
-If your firmware uses the committed default root `aquarium/cooling`, replace
-`aquarium_cooling` in the FHEM file before importing it.
+## MQTT Topics
 
-## Bench Results
+State topics:
 
-Verified fan characterization for the current Noctua bench setup:
+| Topic suffix | Payload |
+|---|---|
+| `/state/water_temp_c` | Water temperature or `unavailable`, one decimal place |
+| `/state/target_temp_c` | Active target temperature, one decimal place |
+| `/state/cooling_on_delta_c` | Fan-on delta in Celsius |
+| `/state/cooling_off_delta_c` | Fan-off delta in Celsius |
+| `/state/high_cooling_delta_c` | Fan-high delta in Celsius |
+| `/state/fan_low_pwm_percent` | Active low-stage PWM |
+| `/state/fan_high_pwm_percent` | Active high-stage PWM |
+| `/state/fan_pwm_percent` | Final commanded fan PWM |
+| `/state/fan_rpm` | Measured fan speed |
+| `/state/controller_mode` | `fan-off`, `fan-low`, `fan-high`, or `water-sensor-fallback` |
 
-- start PWM from standstill: `12%`
-- minimum hold PWM while spinning: `10%`
-- `0%` PWM: `0 RPM`
-- `5%` PWM: `0 RPM`
-- `100%` PWM: `1252 RPM`
+Status and diagnostics include RPM plausibility values, fault state,
+`firmware_version`, `network_ip`, OTA state, remote-config result readings, and
+`availability`.
 
-Verified controller milestone on hardware:
+Remote settings use `/set/...` topics with validated payloads. Invalid values
+are rejected and do not overwrite persisted settings.
 
-- compile and flash successful
-- fan driver initialization successful
-- RPM monitor initialization successful
-- DS18B20 water sensor detected on the shared 1-Wire bus
-- water sensor ROM matched correctly
-- default target temperature verified at `23.0 C`
-- invalid target input falls back to `23.0 C`
-- persisted target survives reboot
-- local water-only staged hysteresis control behaves plausibly
-- fault policy reports alarm code, severity, response, service requirement, and degraded-cooling state
-- water-sensor failure enters `water-sensor-fault`, `critical`, and `water-fallback` at `40%` PWM
-- missing tach feedback enters `fan-fault`, `critical`, and `report-fan-fault`
-- slowed fan / RPM deviation outside tolerance enters `fan-fault` after the configured mismatch debounce
-- fan fault recovery returns to `none` after the configured plausible-match debounce
-- Wi-Fi connects and reports an assigned IP through the `network` command
-- MQTT connects to the broker and publishes with the configured root topic
-- normal broker capture observed the expected telemetry topics for state, diagnostics, and status
-- broker telemetry reports plausible normal values such as `water-control`, target `23.0`, fan RPM, expected RPM, tolerance, and RPM error
-- MQTT publishes the controller firmware version, current IP, and active OTA upload URL
-- MQTT-triggered OTA enable publishes `ota_upload_url`, and a successful BIN upload to `0.1.4` was verified on the fully wired controller
-- water-sensor fault publishes `water-sensor-fault`, `critical`, `water-fallback`, `cooling_degraded=true`, and fallback fan PWM
-- fan RPM deviation publishes `fan-fault`, `critical`, `report-fan-fault`, `cooling_degraded=true`, and `service_required=true`
-- broker telemetry returns to `alarm_code=none` after fault recovery
+## Serial Service
 
-Useful artifacts:
+Serial monitor settings:
 
-- [docs/sensor-bringup-2026-04-12.md](docs/sensor-bringup-2026-04-12.md)
-- [docs/fault-policy-2026-04-16.md](docs/fault-policy-2026-04-16.md)
-- [docs/mqtt-telemetry-2026-04-16.md](docs/mqtt-telemetry-2026-04-16.md)
-- [docs/aquarium-live-tests/2026-04-16-aquarium-2h-summary.md](docs/aquarium-live-tests/2026-04-16-aquarium-2h-summary.md)
-- [docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-aquarium-2h-fhem-export.csv)
-- [docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-summary.md](docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-summary.md)
-- [docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-to-2026-04-17-aquarium-28h-fhem-export.csv)
-- [docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-summary.md](docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-summary.md)
-- [docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-fhem-export.csv](docs/aquarium-live-tests/2026-04-16-to-2026-04-25-aquarium-9d-water-change-fhem-export.csv)
-- [docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-summary.md](docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-summary.md)
-- [docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-fhem-export.csv](docs/aquarium-live-tests/2026-04-27-to-2026-04-30-aquarium-76h-no-air-assist-fhem-export.csv)
-- [docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-summary.md](docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-summary.md)
-- [docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-fhem-export.csv](docs/aquarium-live-tests/2026-04-30-to-2026-05-02-aquarium-44h-water-only-18pct-fhem-export.csv)
-- [docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-summary.md](docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-summary.md)
-- [docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-fhem-export.csv](docs/aquarium-live-tests/2026-05-02-to-2026-05-13-aquarium-11d-water-only-22pct-fhem-export.csv)
-- [docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-summary.md](docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-summary.md)
-- [docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-fhem-export.csv](docs/aquarium-live-tests/2026-05-14-to-2026-06-13-aquarium-30d-staged-control-tuning-fhem-export.csv)
-- [integrations/fhem/README.md](integrations/fhem/README.md)
-- [docs/result fan test/fan-curve-chart.svg](docs/result%20fan%20test/fan-curve-chart.svg)
-- [docs/result fan test/controller-smoke-test-2026-04-12.md](docs/result%20fan%20test/controller-smoke-test-2026-04-12.md)
+```text
+115200 baud
+```
+
+Commands:
+
+| Command | Effect |
+|---|---|
+| `status` | Print current diagnostics |
+| `target <c>` | Persist a custom target temperature |
+| `default` | Reset target temperature to `23.0 C` |
+| `control` | Print active staged-control settings |
+| `faults` | Print fault-policy defaults |
+| `network` | Print Wi-Fi/MQTT status |
+| `publish` | Publish MQTT telemetry immediately |
+| `ota status` | Print OTA state |
+| `ota enable` | Open the temporary OTA window |
+| `ota cancel` | Close the OTA window |
+| `help` | Show command list |
+
+## Repository Layout
+
+| Path | Purpose |
+|---|---|
+| `firmware/controller/` | Main ESP32 controller firmware |
+| `integrations/fhem/` | FHEM MQTT2 integration |
+| `tools/` | Build, MQTT, OTA, and serial helper scripts |
+| `docs/aquarium-cooling-controller-fsd.md` | Development FSD |
+| `docs/design/` | Architecture and wiring diagrams |
+| `docs/aquarium-live-tests/` | Archived field-test data |
+| `docs/result fan test/` | Archived fan-characterization data |
+| `bin/` | Versioned firmware binaries created by the build script |
 
 ## Troubleshooting
 
-### Fan does not react to PWM
+### Fan Does Not Run
 
 - Verify common ground between ESP32, fan, and `12 V` supply.
-- Check that PWM is wired to the real fan PWM pin.
-- Confirm the intended firmware was actually flashed.
+- Check fan PWM on GPIO25.
+- Confirm fan power is present on the 12 V line.
+- Run serial `status` and inspect the active controller mode and PWM command.
 
-### RPM stays at zero
+### RPM Stays at Zero
 
-- Check the tach pull-up to `3.3 V`.
-- Verify tach is wired to `GPIO26`.
-- Confirm the fan model really provides tach pulses.
+- Check tach wiring on GPIO26.
+- Check the `3.3 kOhm` tach pull-up to `3.3 V`.
+- Confirm the fan provides a tach output.
 
-### DS18B20 sensors are not detected
+### Water Temperature Is Unavailable
 
-- Verify the 1-Wire bus is on `GPIO33`.
-- Check the `3.3 kOhm` pull-up from data to `3.3 V`.
-- Confirm shared ground with the ESP32.
-- Re-check the verified potted-sensor colors: `rot = 3.3 V`, `gelb = GND`, `gruen = DATA`.
+- Check DS18B20 DATA on GPIO33.
+- Check the `3.3 kOhm` 1-Wire pull-up to `3.3 V`.
+- Confirm the configured water-sensor ROM matches the installed sensor.
+- Verify sensor wiring: `rot = 3.3 V`, `gelb = GND`, `gruen = DATA`.
 
-### Target temperature behaves unexpectedly
+### MQTT or FHEM Does Not Update
 
-- Run `status` and inspect `Target source` and `Target defaulted`.
-- Use `default` to clear persisted target temperature and return to `23.0 C`.
-- If `target <c>` is outside the valid range, the firmware intentionally falls back to `23.0 C`.
+- Run serial `network` and compare the reported root topic with the FHEM
+  `readingList`.
+- Confirm the broker receives `<root>/status/availability`.
+- Verify the FHEM `IODev` points to the correct MQTT2 device.
+- Check `remote_config_last_result`, `remote_config_last_key`, and
+  `remote_config_last_detail` after sending a FHEM command.
 
-### FHEM readings do not update
+### OTA Fails
 
-- Verify that the FHEM `IODev` points to the correct `MQTT2_CLIENT` or `MQTT2_SERVER`.
-- Compare the root topic reported by the serial `network` command with the root topic in [integrations/fhem/aquarium-cooling-mqtt2-device.cfg](integrations/fhem/aquarium-cooling-mqtt2-device.cfg).
-- Confirm the broker receives `<root>/status/availability` as `online`.
-- Check `remote_config_last_result`, `remote_config_last_key`, and `remote_config_last_detail` after trying a FHEM set command.
-
-### Upload fails
-
-- Re-check the selected COM port.
-- Close any open serial monitor that still holds the port.
-- Verify Arduino IDE and `arduino-cli` are using the same ESP32 core installation.
-- If a direct `arduino-cli` command fails inside Codex with `Arduino15` access
-  errors, rerun the repository `tools/build.ps1` instead of compiling manually.
-
-## Roadmap
-
-Next likely steps:
-
-1. Extend the first installed aquarium capture to longer live data for the released water-only control strategy.
-2. Review FHEM/DB logging completeness for long-term aquarium analysis.
-3. Finalize enclosure, wiring, and installation layout for the real aquarium.
-4. Re-check fan plausibility in the final installed airflow path.
-5. Evaluate the optional local OLED temperature display.
-
-## Contributing
-
-Issues, ideas, measurements, and implementation feedback are welcome.
-
-If you want to contribute code:
-
-1. Open an issue or describe the intended change first.
-2. Keep hardware assumptions explicit.
-3. Preserve the rule that critical cooling stays local on the ESP32.
-4. Test on real hardware when a change touches PWM, tach, or sensor handling.
-
-## License
-
-This repository is licensed under the GNU General Public License v3.0.
-
-See [LICENSE](LICENSE) for the full license text.
+- Run `tools/ota-upload.ps1` from the repository root.
+- Confirm MQTT is online before starting OTA.
+- Confirm the build produced a newer versioned BIN in `bin/`.
+- Do not use `-UploadUrl` unless you are explicitly troubleshooting the raw
+  HTTP endpoint.
 
 ## Project Links
 
-- Repository: [github.com/TeeVau/aquarium-cooling-controller](https://github.com/TeeVau/aquarium-cooling-controller)
-- Releases: [github.com/TeeVau/aquarium-cooling-controller/releases](https://github.com/TeeVau/aquarium-cooling-controller/releases)
-- API documentation: [teevau.github.io/aquarium-cooling-controller](https://teevau.github.io/aquarium-cooling-controller/)
-- Pages workflow: [github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml](https://github.com/TeeVau/aquarium-cooling-controller/actions/workflows/doxygen-pages.yml)
-- Social preview asset: [docs/assets/github-social-preview.png](docs/assets/github-social-preview.png)
-- Functional specification: [docs/aquarium-cooling-controller-fsd.md](docs/aquarium-cooling-controller-fsd.md)
+- Releases: <https://github.com/TeeVau/aquarium-cooling-controller/releases>
+- API documentation: <https://teevau.github.io/aquarium-cooling-controller/>
+- FSD: [docs/aquarium-cooling-controller-fsd.md](docs/aquarium-cooling-controller-fsd.md)
+- FHEM integration: [integrations/fhem/README.md](integrations/fhem/README.md)
+- License: [GPL-3.0](LICENSE)

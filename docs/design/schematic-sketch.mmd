@@ -14,11 +14,10 @@ flowchart LR
         V33["3.3 V"]
         PULL1["3.3k Pull-up<br/>1-Wire to 3.3 V"]
         PULL2["3.3k Pull-up<br/>TACH to 3.3 V"]
-        PWMIF["PWM Interface Stage<br/>TBD / validate with 4-pin fan"]
+        PWMIF["Fan PWM Signal<br/>25 kHz control input"]
 
         TERMF["Terminal Block<br/>Fan"]
         TERMSW["Terminal Block<br/>Water Sensor"]
-        TERMSA["Terminal Block<br/>Air Sensor"]
 
         GPIO25["GPIO25<br/>Fan PWM"]
         GPIO26["GPIO26<br/>Fan TACH"]
@@ -28,7 +27,6 @@ flowchart LR
 
     FAN["120 mm 4-pin PWM Fan"]
     DSW["DS18B20<br/>Water Temperature"]
-    DSA["DS18B20<br/>Air Temperature"]
     LIGHT["Aquarium Lighting Area"]
   end
 
@@ -44,14 +42,12 @@ flowchart LR
 
   GPIO33 --- PULL1
   GPIO33 --- TERMSW
-  GPIO33 --- TERMSA
 
   GPIO25 --> PWMIF
   PWMIF --> TERMF
 
   TERMF --> FAN
   TERMSW --> DSW
-  TERMSA --> DSA
 
   FAN --> GPIO26
   GPIO26 --- PULL2
@@ -59,6 +55,5 @@ flowchart LR
   GND --- ESP
   GND --- TERMF
   GND --- TERMSW
-  GND --- TERMSA
 
   LIGHT --- ENC

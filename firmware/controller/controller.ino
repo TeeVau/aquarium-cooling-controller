@@ -3,11 +3,11 @@
  * @brief Arduino sketch entry point for the aquarium cooling controller.
  *
  * The sketch wires the firmware modules together and owns the runtime loop. It
- * initializes persistent temperature-control storage, water-temperature
+ * sets up persistent temperature-control storage, water-temperature
  * sensing, fan PWM output, tachometer RPM monitoring, fault evaluation, serial
  * diagnostics, and optional MQTT telemetry.
  *
- * Runtime behavior is intentionally local-first: cooling control, fan safety
+ * Runtime behavior is locally autonomous by design: cooling control, fan safety
  * monitoring, and diagnostics continue on the ESP32 even when Wi-Fi, MQTT, or
  * external integrations are unavailable.
  *
@@ -35,7 +35,7 @@
  *
  * @section controller_serial Serial Commands
  *
- * The serial monitor exposes bench and service commands for status output,
+ * The serial monitor exposes service commands for status output,
  * target-temperature changes, default reset, control defaults, fault-policy
  * settings, network status, and forced telemetry publishing.
  *
@@ -65,7 +65,7 @@
 
 namespace {
 
-#define AQ_FIRMWARE_VERSION "0.1.9"
+#define AQ_FIRMWARE_VERSION "0.2.0"
 
 constexpr char kFirmwareName[] = "aq-cooling-controller";
 constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
@@ -247,7 +247,7 @@ void printCurveSummary() {
   Serial.print(FanCurve::kMinimumHoldPwmPercent);
   Serial.println("%");
 
-  Serial.print("Initial plausibility tolerance: +/-");
+  Serial.print("Startup plausibility tolerance: +/-");
   Serial.print(FanCurve::kPlausibilityTolerancePercent);
   Serial.println("%");
 }
@@ -1114,7 +1114,7 @@ void handleSerialCommand(const char* command) {
 
   if (strcmp(command, "publish") == 0) {
     if (!lastFaultSnapshotValid) {
-      Serial.println("Telemetry not ready yet. Wait for the first diagnostics cycle.");
+      Serial.println("Telemetry not ready yet. Wait for the next diagnostics cycle.");
       return;
       }
 
@@ -1202,12 +1202,12 @@ ControlInputs buildControlInputs(const SensorSnapshot& sensorSnapshot) {
 }  // namespace
 
 /**
- * @brief Initializes hardware, persisted settings, diagnostics, and telemetry.
+ * @brief Sets up hardware, persisted settings, diagnostics, and telemetry.
  *
  * Arduino calls this once after boot. The setup routine brings up serial output,
  * non-volatile preferences, fan PWM, RPM capture, the OneWire sensor bus, and
- * MQTT telemetry. It also prints the initial hardware configuration and the
- * measured fan curve so bench bring-up can be verified from the serial monitor.
+ * MQTT telemetry. It also prints the hardware configuration and measured fan
+ * curve so an installed controller can be inspected from the serial monitor.
  */
 void setup() {
   Serial.begin(115200);

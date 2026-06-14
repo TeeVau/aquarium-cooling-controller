@@ -13,7 +13,7 @@
     "fan_pwm": 25,
     "fan_tach": 26
   },
-  "validated_bench_setup": {
+  "validated_fan_setup": {
     "fan_model": "Noctua NF-S12A PWM",
     "tach_pullup_ohm": 3300,
     "common_ground_required": true
