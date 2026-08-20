@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-20
+
+### Added
+
+- Added optional local `0.91"` monochrome `128x32` `I2C` OLED support with a
+  short `BOOT` start view, large one-decimal water-temperature rendering, and
+  fault indication as `!` plus `WATER`, `FAN`, or `BOTH`.
+- Added fail-open OLED diagnostics and runtime behavior so missing or failing
+  display hardware does not affect local control, MQTT, or OTA.
+
+### Changed
+
+- Promoted the firmware version to `0.3.0`.
+- Documented the released OLED wiring on GPIO32 / GPIO27 and updated README,
+  FSD, design notes, and integration documentation for the completed display
+  feature set.
+
 ## [0.2.0] - 2026-06-14
 
 ### Added
@@ -98,7 +115,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Changelog structure and documented SemVer / Keep a Changelog release
   policy.
 
-[Unreleased]: https://github.com/TeeVau/aquarium-cooling-controller/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/TeeVau/aquarium-cooling-controller/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/TeeVau/aquarium-cooling-controller/releases/tag/v0.3.0
 [0.2.0]: https://github.com/TeeVau/aquarium-cooling-controller/releases/tag/v0.2.0
 [0.1.4]: https://github.com/TeeVau/aquarium-cooling-controller/releases/tag/v0.1.4
 [0.1.0]: https://github.com/TeeVau/aquarium-cooling-controller/releases/tag/v0.1.0

@@ -15,13 +15,16 @@ flowchart LR
         PULL1["3.3k Pull-up<br/>1-Wire to 3.3 V"]
         PULL2["3.3k Pull-up<br/>TACH to 3.3 V"]
         PWMIF["Fan PWM Signal<br/>25 kHz control input"]
+        OLED["0.91 in 128x32 I2C OLED<br/>optional local status display"]
 
         TERMF["Terminal Block<br/>Fan"]
-        TERMSW["Terminal Block<br/>Water Sensor"]
+        TERMSW["3-Pin Metal Circular Connector<br/>1: 3.3 V / VCC<br/>2: GND<br/>3: DATA"]
 
         GPIO25["GPIO25<br/>Fan PWM"]
         GPIO26["GPIO26<br/>Fan TACH"]
         GPIO33["GPIO33<br/>1-Wire Bus"]
+        GPIO32["GPIO32<br/>OLED SDA"]
+        GPIO27["GPIO27<br/>OLED SCL"]
       end
     end
 
@@ -42,6 +45,8 @@ flowchart LR
 
   GPIO33 --- PULL1
   GPIO33 --- TERMSW
+  GPIO32 --> OLED
+  GPIO27 --> OLED
 
   GPIO25 --> PWMIF
   PWMIF --> TERMF

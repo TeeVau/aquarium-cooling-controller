@@ -8,8 +8,8 @@
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f)](https://teevau.github.io/aquarium-cooling-controller/)
 
 ESP32 firmware for autonomous aquarium cooling with a 4-pin PWM fan, one
-DS18B20 water-temperature sensor, MQTT telemetry, FHEM integration, and
-broker-driven OTA updates.
+DS18B20 water-temperature sensor, an optional local OLED status display, MQTT
+telemetry, FHEM integration, and broker-driven OTA updates.
 
 ![Aquarium Cooling Controller hero preview](docs/assets/github-social-preview.png)
 
@@ -19,7 +19,7 @@ The controller keeps cooling decisions local on the ESP32. Wi-Fi, MQTT, FHEM,
 and OTA are useful for monitoring and maintenance, but cooling continues even
 when the network is unavailable.
 
-Current release: `0.2.0`.
+Current release: `0.3.0`.
 
 Main capabilities:
 
@@ -29,6 +29,8 @@ Main capabilities:
 - Persistent target and staged-control settings in ESP32 Preferences / NVS.
 - Fixed DS18B20 water-sensor assignment by ROM ID.
 - Fan RPM monitoring with tach-based plausibility checks.
+- Optional `0.91"` monochrome `128x32` `I2C` OLED status display for local
+  water temperature and fault indication.
 - MQTT telemetry for state, diagnostics, fault state, OTA state, and availability.
 - Validated MQTT remote settings for target temperature, hysteresis, fan stages,
   and OTA enable/disable.
@@ -43,10 +45,12 @@ Main capabilities:
 | ESP32 DevKit / ESP32-WROOM class board | Main controller | Built with FQBN `esp32:esp32:esp32` |
 | Noctua NF-S12A PWM or compatible 4-pin PWM fan | Cooling actuator | 12 V fan supply |
 | DS18B20 waterproof sensor | Water temperature | Current ROM: `28333844050000CB` |
+| 3-pin metal circular connector | Detachable water-sensor connection | Fixed project pinout: pin 1 VCC, pin 2 GND, pin 3 DATA |
 | 12 V power supply | Fan power | Common ground with ESP32 is required |
 | 12 V to 5 V buck converter | ESP32 supply | Recommended for an installed controller |
 | `3.3 kOhm` pull-up | 1-Wire bus | DATA to `3.3 V` |
 | `3.3 kOhm` pull-up | Tach input | TACH to `3.3 V` |
+| `0.91"` monochrome `128x32` `I2C` OLED (optional) | Local status view | SSD1306-compatible class, tested on GPIO32 / GPIO27 |
 
 ## Wiring
 
@@ -55,15 +59,37 @@ Main capabilities:
 | Fan PWM | 25 | 25 kHz PWM output |
 | Fan TACH | 26 | Tach input with `3.3 kOhm` pull-up |
 | 1-Wire DATA | 33 | DS18B20 bus with `3.3 kOhm` pull-up |
+| OLED SDA (optional) | 32 | `I2C` data line for the local status display |
+| OLED SCL (optional) | 27 | `I2C` clock line for the local status display |
 
-Fan connector reference:
+Fan connector reference for the installed project wiring:
 
-| Fan Pin | Signal | Typical Color | Project Connection |
+| Fan Pin | Signal | Project Wire Color | Project Connection |
 |---|---|---|---|
 | 1 | GND | Black | Common GND |
-| 2 | +12 V | Yellow | 12 V fan supply |
-| 3 | TACH | Green | ESP32 GPIO26 |
+| 2 | +12 V | Red | 12 V fan supply |
+| 3 | TACH | Yellow | ESP32 GPIO26 with `3.3 kOhm` pull-up to `3.3 V` |
 | 4 | PWM | Blue | ESP32 GPIO25 |
+
+Water-temperature sensor connector:
+
+> **Documentation follow-up:** Rework this connector section after checking
+> the real plug and socket again. Add a correct, clearly oriented photo that
+> shows the contact numbers and identifies the plug/socket viewing side. Until
+> that review is complete, treat the table below as the intended project
+> pinout and verify the actual contacts by their markings and with an unpowered
+> continuity test.
+
+| Connector Pin | Signal | Controller Connection | Sensor Wire |
+|---:|---|---|---|
+| 1 | VCC | `3.3 V` | `rot` |
+| 2 | GND | Common GND | `gelb` |
+| 3 | DATA | ESP32 GPIO33 with `3.3 kOhm` pull-up to `3.3 V` | `gruen` |
+
+Use the pin numbers marked on the connector insert. Do not infer the numbering
+from a front or rear view because the mating halves appear mirrored. The metal
+connector shell is not an additional electrical contact and remains
+unconnected.
 
 Known cable colors for the currently used potted DS18B20 sensor:
 
@@ -72,6 +98,25 @@ Known cable colors for the currently used potted DS18B20 sensor:
 | `rot` | `3.3 V` |
 | `gelb` | `GND` |
 | `gruen` | `DATA` |
+
+## Optional OLED Status Display
+
+Tested display class:
+
+```text
+0.91" monochrome 128x32 I2C OLED
+```
+
+Display behavior in the current release:
+
+- During startup, the display briefly shows `BOOT`.
+- During normal operation, it shows only the current water temperature as a
+  large one-decimal value.
+- During an active fault, it replaces the temperature with a large `!` and the
+  fault label `WATER`, `FAN`, or `BOTH`.
+- The display is strictly optional. If it is missing, not detected, or later
+  fails, the controller disables the display path and continues local cooling,
+  MQTT, FHEM, and OTA operation normally.
 
 ## Install
 
@@ -248,7 +293,23 @@ Commands:
 - Check DS18B20 DATA on GPIO33.
 - Check the `3.3 kOhm` 1-Wire pull-up to `3.3 V`.
 - Confirm the configured water-sensor ROM matches the installed sensor.
+- Verify the circular connector pinout: `1 = 3.3 V/VCC`, `2 = GND`,
+  `3 = DATA/GPIO33`.
+- With power disconnected, check continuity through both connector halves and
+  make sure their mirrored physical views have not caused the pins to be
+  swapped.
 - Verify sensor wiring: `rot = 3.3 V`, `gelb = GND`, `gruen = DATA`.
+
+### OLED Stays Dark
+
+- Verify OLED power, ground, and the `I2C` wiring on GPIO32 (`SDA`) and GPIO27
+  (`SCL`).
+- Confirm the module is a compatible `128x32` monochrome `I2C` OLED in the
+  usual SSD1306-compatible address range.
+- Check serial diagnostics for OLED detection and active display mode.
+- If no compatible OLED is detected, the controller keeps running normally;
+  correct the wiring or replace the display module without treating it as a
+  cooling fault.
 
 ### MQTT or FHEM Does Not Update
 

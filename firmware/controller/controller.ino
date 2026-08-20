@@ -59,13 +59,14 @@
 #include "fault_monitor.h"
 #include "fault_policy.h"
 #include "mqtt_telemetry.h"
+#include "oled_status_display.h"
 #include "ota_upload_server.h"
 #include "rpm_monitor.h"
 #include "sensor_manager.h"
 
 namespace {
 
-#define AQ_FIRMWARE_VERSION "0.2.0"
+#define AQ_FIRMWARE_VERSION "0.3.0"
 
 constexpr char kFirmwareName[] = "aq-cooling-controller";
 constexpr char kFirmwareVersion[] = AQ_FIRMWARE_VERSION;
@@ -113,11 +114,22 @@ constexpr SensorManagerConfig kSensorManagerConfig = {
     },
 };
 
+constexpr OledStatusDisplayConfig kOledStatusDisplayConfig = {
+    32,
+    27,
+    128,
+    32,
+    0x3C,
+    0x3D,
+    400000,
+};
+
 FanDriver fanDriver;
 RpmMonitor rpmMonitor;
 FaultMonitor faultMonitor;
 SensorManager sensorManager(kSensorManagerConfig);
 MqttTelemetry mqttTelemetry;
+OledStatusDisplay oledStatusDisplay(kOledStatusDisplayConfig);
 OtaUploadServer otaUploadServer;
 Preferences preferences;
 ControlConfig runtimeControlConfig = kDefaultControlConfig;
@@ -666,6 +678,33 @@ void printRemoteConfigStatus() {
   Serial.println(remoteConfigStatus.lastDetail);
 }
 
+void printDisplayStatus() {
+  Serial.print("  OLED available: ");
+  Serial.println(oledStatusDisplay.isAvailable() ? "yes" : "no");
+
+  Serial.print("  OLED mode: ");
+  Serial.println(oledStatusDisplay.modeLabel());
+
+  Serial.print("  OLED primary text: ");
+  if (oledStatusDisplay.primaryText()[0] == '\0') {
+    Serial.println("-");
+  } else {
+    Serial.println(oledStatusDisplay.primaryText());
+  }
+
+  Serial.print("  OLED secondary text: ");
+  if (oledStatusDisplay.secondaryText()[0] == '\0') {
+    Serial.println("-");
+  } else {
+    Serial.println(oledStatusDisplay.secondaryText());
+  }
+
+  if (oledStatusDisplay.isAvailable()) {
+    Serial.print("  OLED I2C address: 0x");
+    Serial.println(oledStatusDisplay.address(), HEX);
+  }
+}
+
 void confirmRunningOtaImageIfNeeded() {
   const esp_partition_t* runningPartition = esp_ota_get_running_partition();
   if (runningPartition == nullptr) {
@@ -753,6 +792,7 @@ void printDiagnostics(const FaultMonitorSnapshot& snapshot,
   Serial.print("  Fan ok: ");
   Serial.println(policySnapshot.fanOk ? "yes" : "no");
 
+  printDisplayStatus();
   printRemoteConfigStatus();
 
   Serial.print("  Start boost active: ");
@@ -1220,6 +1260,8 @@ void setup() {
   const bool rpmReady = rpmMonitor.begin();
   const bool sensorBusReady = sensorManager.begin(millis());
   const SensorSnapshot& sensorSnapshot = sensorManager.snapshot();
+  const bool oledReady = oledStatusDisplay.begin(millis());
+  oledStatusDisplay.update(millis(), sensorSnapshot, false, lastFaultPolicySnapshot);
   lastControlSnapshot =
       ControlEngine::compute(buildControlInputs(sensorSnapshot), runtimeControlConfig);
   confirmRunningOtaImageIfNeeded();
@@ -1233,6 +1275,8 @@ void setup() {
   Serial.println(rpmReady ? "ok" : "failed");
   Serial.print("Sensor bus init: ");
   Serial.println(sensorBusReady ? "ok" : "failed");
+  Serial.print("OLED display init: ");
+  Serial.println(oledReady ? "ok" : "disabled");
   Serial.print("Preferences init: ");
   Serial.println(preferencesOk ? "ok" : "failed");
   Serial.print("1-Wire bus GPIO: ");
@@ -1298,6 +1342,7 @@ void loop() {
   mqttTelemetry.update(nowMs);
   otaUploadServer.update(nowMs);
   syncOtaTelemetrySnapshot();
+  oledStatusDisplay.update(nowMs, sensorSnapshot, lastFaultSnapshotValid, lastFaultPolicySnapshot);
 
   if (telemetryPublishRequested && lastFaultSnapshotValid) {
     const bool published = mqttTelemetry.publishTelemetry(nowMs,

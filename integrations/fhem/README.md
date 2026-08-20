@@ -9,7 +9,7 @@ The checked-in configuration is based on the current running installation:
 - MQTT client / server IODev: `myBroker`
 - Room: `Wohnzimmer`
 - Topic root: `aquarium_cooling`
-- Release: `0.2.0`
+- Release: `0.3.0`
 
 The committed template keeps portable placeholder names such as
 `AquariumCooling` and `MQTT2_BROKER`; replace them with your local device names
@@ -35,6 +35,10 @@ before importing if needed.
 
 The template maps the controller's MQTT state, diagnostic, status, OTA, and
 remote-configuration topics to FHEM readings.
+
+The optional OLED is intentionally local-only in `0.3.0`; it does not add a
+separate MQTT topic surface and has no impact on the FHEM integration when it
+is missing or disabled.
 
 Core readings for normal operation:
 

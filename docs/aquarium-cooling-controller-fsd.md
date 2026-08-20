@@ -27,6 +27,8 @@ plausibility-based fault detection.
 - Provide local autonomous cooling based on water temperature.
 - Keep water temperature within an aquarium-safe band around the configured
   target rather than chasing fine-grained sub-degree precision.
+- Provide an optional local OLED temperature readout without making controller
+  operation depend on the display.
 - Minimize unnecessary fan runtime through a simple hysteresis-based water
   controller with fixed low and high cooling stages.
 - Characterize the selected fan automatically before production deployment.
@@ -40,7 +42,9 @@ plausibility-based fault detection.
 ### Non-Goals
 
 - Heating control
-- Local display or button UI
+- Local button UI
+- Multi-page or rotating local display content
+- Simultaneous display of multiple operating values on the OLED
 - Cloud-first control logic
 - MQTT participation during the fan-characterization sketch
 - Complex cloud integrations beyond local MQTT messaging
@@ -57,7 +61,9 @@ plausibility-based fault detection.
    plausibility above the stable operating range.
 6. Wi-Fi and MQTT publish telemetry, and a manually enabled OTA maintenance
    mode can accept a local firmware binary upload when service is required.
-7. Faults are latched and reported without stopping local autonomous control
+7. When present, an optional OLED mirrors one local operator-facing state at a
+   time: boot, normal water temperature, or an active fault indication.
+8. Faults are latched and reported without stopping local autonomous control
    unless a defined fault policy requires a safe fallback state.
 
 ## 2. System Architecture
@@ -80,6 +86,7 @@ Critical local functions:
 
 Non-critical functions:
 
+- Optional OLED status display
 - Wi-Fi connection management
 - MQTT publish/subscribe
 - Temporarily enabled OTA upload service
@@ -96,7 +103,9 @@ Runtime interactions:
 5. RPM monitor measures actual fan speed.
 6. Fault monitor compares measured RPM to the expected curve.
 7. Telemetry layer publishes state and accepts approved remote settings.
-8. The OTA upload service remains disabled during normal operation and, after
+8. OLED status display renders the current visible local display state when a
+   compatible display is present and otherwise remains disabled.
+9. The OTA upload service remains disabled during normal operation and, after
    explicit service activation, accepts a single local firmware binary upload
    for validation and activation.
 
@@ -109,9 +118,11 @@ Runtime interactions:
 | Water sensor | DS18B20 | Primary control variable |
 | Power input | USB-C PD trigger requesting 12 V | Single-cable power source |
 | 5 V PSU | Switched-mode 12 V to 5 V supply / buck converter | Controller supply |
+| OLED display (optional) | `0.91"` monochrome `128x32` `I2C` OLED | Non-critical local status readout |
 | 1-Wire pull-up | 3.3 kOhm to 3.3 V | Bus biasing in the verified bench setup |
 | Tach pull-up | 3.3 kOhm to 3.3 V | Open-collector tach input biasing in the verified bench setup |
-| Terminal blocks | Fan and water sensor connectors | Field wiring termination |
+| Water-sensor connector | 3-pin metal circular connector | Detachable DS18B20 field connection with fixed project pinout |
+| Terminal blocks | Fan and internal wiring connections | Field and enclosure wiring termination |
 
 Pin assignment:
 
@@ -120,15 +131,37 @@ Pin assignment:
 | Fan PWM | 25 | 25 kHz PWM output |
 | Fan TACH | 26 | Interrupt-capable input with 3.3 kOhm pull-up to 3.3 V |
 | 1-Wire bus | 33 | DS18B20 bus for the water sensor |
+| OLED SDA (optional) | 32 | `I2C` data line for the optional OLED |
+| OLED SCL (optional) | 27 | `I2C` clock line for the optional OLED |
 
-Fan connector pinout:
+Fan connector pinout for the installed project wiring:
 
-| Fan Pin | Signal | Typical Color | Project Connection |
+| Fan Pin | Signal | Project Wire Color | Project Connection |
 |---|---|---|---|
 | 1 | GND | Black | Common GND |
-| 2 | +12 V | Yellow | 12 V fan supply from PD rail |
-| 3 | TACH | Green | ESP32 GPIO26 tach input |
+| 2 | +12 V | Red | 12 V fan supply from PD rail |
+| 3 | TACH | Yellow | ESP32 GPIO26 tach input with 3.3 kOhm pull-up to 3.3 V |
 | 4 | PWM | Blue | ESP32 GPIO25 PWM output via interface stage |
+
+Water-temperature sensor connector pinout:
+
+> **Documentation status - open:** This connector documentation must be
+> reviewed against the real plug and socket and supplemented with a correct,
+> clearly oriented photo showing the contact numbers and viewing side. The
+> pinout below remains the intended project mapping until that hardware-backed
+> documentation review is complete.
+
+| Connector Pin | Signal | Controller-Side Connection | Current Sensor Wire |
+|---:|---|---|---|
+| 1 | VCC | 3.3 V | Red (`rot`) |
+| 2 | GND | Common GND | Yellow (`gelb`) |
+| 3 | DATA | ESP32 GPIO33 with 3.3 kOhm pull-up to 3.3 V | Green (`gruen`) |
+
+The numbered contacts marked on the connector insert define the pinout on both
+mating halves. Visual left-to-right positions shall not be used because front
+and rear views, as well as plug and socket, appear mirrored. The metal shell is
+not part of the three-contact signal pinout and shall remain electrically
+unconnected unless a later documented shielding design explicitly assigns it.
 
 Hardware constraints:
 
@@ -137,6 +170,10 @@ Hardware constraints:
 - The final PWM output stage must be electrically compatible with 4-pin PC fan
   PWM input requirements.
 - The tach signal shall be treated as open-collector/open-drain style feedback.
+- The water sensor shall be connected or disconnected only while controller
+  power is off.
+- The 1-Wire pull-up shall remain on the controller side between DATA/pin 3 and
+  3.3 V so it remains present when the sensor is unplugged.
 
 ### 2.3 Software Architecture
 
@@ -153,6 +190,7 @@ Planned software modules:
 | `rpm_monitor` | Tach pulse counting and RPM calculation |
 | `fault_monitor` | Plausibility checking, debounce, fault latching |
 | `fault_policy` | Alarm classification, severity, and local fault response |
+| `oled_status_display` | Optional local OLED rendering for boot, temperature, and fault indication |
 | `telemetry` | Wi-Fi, MQTT publish/subscribe, diagnostics |
 | `ota_upload_server` | Temporary BIN-only OTA upload endpoint, image validation, update handoff |
 
@@ -203,6 +241,12 @@ Update model:
 - OTA shall be treated as a non-critical service and shall not block local
   cooling startup.
 - OTA failures shall leave the device on the previously working firmware.
+- For the OLED feature workstream, OTA-deployable development builds used
+  versions starting at `0.2.1` and increasing monotonically from the installed
+  `0.2.0` baseline so the broker-driven OTA workflow could validate them as
+  newer.
+- The completed OLED feature set is prepared for release as version `0.3.0`
+  after implementation and basic real-hardware verification.
 
 ## 3. Implementation Phases
 
@@ -319,6 +363,47 @@ Dependencies:
 - Phase 2 production controller complete
 - MQTT broker and Wi-Fi credentials available
 
+### 3.4 Phase 4 - Optional Local OLED Status Display
+
+Scope:
+
+- Add optional `0.91"` monochrome `128x32` `I2C` OLED support as a strictly
+  non-critical local display path
+- Introduce a short `BOOT` start view before the first stable runtime display
+  state is known
+- Show only the current water temperature as a large one-decimal number during
+  normal operation
+- Replace the normal temperature view with a large `!` plus a small fault text
+  of `WATER`, `FAN`, or `BOTH` when an active alarm is present
+- Keep the display fully disabled when no compatible OLED is detected
+
+Bring-up sequence:
+
+- Phase 4a: implement the optional display path and fail-open behavior without
+  requiring the real display hardware to be connected
+- Phase 4b: connect the real OLED module and complete the first hardware
+  verification on the installed controller
+
+Deliverables:
+
+- Optional OLED display module integrated into production firmware
+- Defined display-state behavior for boot, normal operation, and active faults
+- Non-blocking no-display detection and disable path
+- Hardware verification notes for the real connected OLED
+
+Exit criteria:
+
+- Firmware continues to boot and regulate normally with no OLED connected
+- With a connected OLED, `BOOT`, temperature, and fault screens render as
+  specified
+- No display state can block or degrade local cooling, MQTT, or OTA behavior
+
+Dependencies:
+
+- Phase 2 production controller complete
+- Phase 3 OTA workflow available for iterative development starting at `0.2.1`
+- Access to a compatible OLED module for Phase 4b hardware verification
+
 ## 4. Functional Requirements
 
 ### 4.1 Functional Requirements (FR)
@@ -367,6 +452,10 @@ Dependencies:
   at boot, validate it, and apply defaults if stored values are invalid.
 - FR-2.11 [Must]: The production controller shall continue local cooling
   operation when Wi-Fi or MQTT is unavailable.
+- FR-2.12 [Must]: The DS18B20 water-temperature sensor shall be detachable
+  through a 3-pin metal circular connector with pin 1 assigned to 3.3 V/VCC,
+  pin 2 assigned to GND, and pin 3 assigned to DATA on ESP32 GPIO33.
+
 #### Phase 2 - Fault Handling
 
 - FR-3.1 [Must]: The production controller shall estimate expected fan RPM from
@@ -422,6 +511,34 @@ Dependencies:
   fault severity, fault response, water-sensor health, degraded-cooling state,
   or service-required state changes.
 
+#### Phase 4 - Optional Local OLED Display
+
+- FR-5.1 [Must]: The production controller shall support an optional local
+  `I2C` OLED status display using a `0.91"` monochrome `128x32` display class.
+- FR-5.2 [Must]: During normal operation, the display shall show only the
+  current water temperature as a large one-decimal numeric value.
+- FR-5.3 [Must]: During startup, before the first stable runtime display state
+  is known, the display shall show `BOOT`.
+- FR-5.4 [Must]: When an active fault alarm is present, the display shall
+  replace the normal temperature view with a large `!` and a small fault text.
+- FR-5.5 [Must]: The display fault texts shall be `WATER` for a water-sensor
+  fault, `FAN` for a fan fault, and `BOTH` for a combined water-sensor and fan
+  fault.
+- FR-5.6 [Must]: The OLED v1 implementation shall not add buttons, page
+  switching, rotating content, simultaneous multi-value display, or fan-RPM
+  display.
+- FR-5.7 [Must]: Missing, non-initializable, or later failing display hardware
+  shall not affect sensing, control, fault handling, MQTT, OTA, or the normal
+  controller boot path.
+- FR-5.8 [Should]: The display should update only when the visible rendered
+  content changes.
+- FR-5.9 [Must]: If no compatible OLED is detected on the configured `I2C`
+  bus, the firmware shall disable the display path and continue normal
+  controller operation.
+- FR-5.10 [Should]: The firmware should expose display-availability state
+  through serial diagnostics so bring-up and later field support remain
+  understandable.
+
 ### 4.2 Non-Functional Requirements (NFR)
 
 - NFR-1.1 [Must]: Critical cooling logic must execute locally on the ESP32 and
@@ -450,6 +567,10 @@ Dependencies:
 - NFR-1.12 [Must]: Production firmware version numbers shall follow Semantic
   Versioning 2.0.0 as `MAJOR.MINOR.PATCH`, with optional pre-release or build
   metadata only when it conforms to the SemVer specification.
+- NFR-1.12a [Must]: OLED feature development builds intended for OTA testing
+  shall use monotonically increasing versions starting at `0.2.1` above the
+  currently installed `0.2.0` baseline, and the intended completed feature
+  release shall use version `0.3.0`.
 - NFR-1.13 [Must]: The repository shall maintain release history in
   `CHANGELOG.md` using the Keep a Changelog structure, including an
   `Unreleased` section and grouped notable changes for each released version.
@@ -460,7 +581,9 @@ Dependencies:
 ### 4.3 Constraints
 
 - System only cools; it does not provide heating.
-- No local display or button interface is planned.
+- The optional local OLED interface is display-only and shall not introduce a
+  local input path.
+- The OLED v1 scope shall show only one operator-facing item at a time.
 - Water-sensor identification shall not depend on DS18B20 bus order.
 - The final PWM electrical interface must be validated with the selected fan.
 - Fan plausibility tolerance and confirmed fan-fault reaction are not yet fully
@@ -484,6 +607,9 @@ Dependencies:
 | DS18B20 bus or role mapping errors misidentify the water sensor | Low | High | Assign the water sensor by ROM ID and verify mapping at commissioning |
 | Fault reaction for confirmed fan fault remains underspecified | Medium | High | Finalize explicit reaction before production release |
 | Unauthenticated OTA upload window is reachable by other clients on the local network | Low | High | Keep OTA disabled by default, require explicit service activation, limit the upload window, accept one upload attempt, and validate firmware identity before activation |
+| Initial OLED wiring, address selection, or module-compatibility errors delay first hardware verification | Medium | Medium | Implement and OTA-test the display path with strict fail-open behavior first, then confirm wiring, address detection, and runtime rendering on the connected OLED |
+| `I2C` OLED detection or runtime errors interfere with startup | Medium | High | Keep OLED initialization optional, time-bounded, and non-blocking; disable the display path on failure |
+| Mirrored connector views or ignored contact markings swap VCC, GND, and DATA during assembly | Medium | High | Use only the insert-marked pin numbers, wire both halves to the fixed project pinout, and perform an unpowered continuity test before connecting the ESP32 or sensor |
 
 ### Assumptions
 
@@ -500,6 +626,9 @@ Dependencies:
 - A 60-second regular MQTT snapshot interval is sufficient for the 120-liter
   aquarium because the water mass changes thermally much more slowly than the
   local 2-second control loop (assumed).
+- A compatible `0.91"` `128x32` `I2C` OLED has been connected on GPIO32/GPIO27
+  and basic hardware verification of the normal temperature view has been
+  completed in the installed controller.
 
 ### External Dependencies
 
@@ -532,7 +661,8 @@ Dependencies:
 |---|---|---|
 | 4-pin fan PWM | ESP32 -> fan | Speed command at nominal 25 kHz PWM |
 | 4-pin fan tach | fan -> ESP32 | Pulse feedback for RPM measurement |
-| 1-Wire bus | bidirectional | DS18B20 bus for the water sensor |
+| 1-Wire water-sensor connector | bidirectional | Detachable DS18B20 interface: pin 1 = 3.3 V/VCC, pin 2 = GND, pin 3 = DATA/GPIO33 |
+| `I2C` OLED (optional) | ESP32 -> display | Non-critical local status display for boot, temperature, and active faults |
 | USB serial | ESP32 -> host | Diagnostics and characterization output |
 | Wi-Fi | ESP32 <-> LAN | Production telemetry transport |
 | MQTT | ESP32 <-> broker | Production state publish and remote set commands |
@@ -663,6 +793,8 @@ diagnostic campaigns and removed again afterward.
 | `rpm_monitor` | `fault_monitor` | Measured RPM |
 | `fan_curve` | `fault_monitor` | Expected RPM interpolation lookup |
 | `fault_monitor` | `fault_policy` | Fan plausibility state and latched fan fault |
+| `sensor_manager` | `oled_status_display` | Rounded water-temperature source for the local display |
+| `fault_policy` | `oled_status_display` | Active alarm class for local fault rendering |
 | `fault_policy` | `telemetry` | Alarm code, severity, response, and service state |
 
 ### 6.3 Data Models / Schemas
@@ -742,6 +874,15 @@ Consistency rules:
 | `changelog_section` | Markdown section | Keep a Changelog release section containing grouped notable changes for the version |
 | `release_state` | enum/string | `unreleased`, `pre-release`, or `released` |
 
+#### OLED Display State Model
+
+| Field | Type | Description |
+|---|---|---|
+| `display_available` | bool | Whether a compatible OLED was detected and initialized |
+| `display_mode` | enum/string | `boot`, `temperature`, `fault`, or `disabled` |
+| `display_text_primary` | string | Main rendered content such as `BOOT`, `23.4`, or `!` |
+| `display_text_secondary` | string | Optional fault text such as `WATER`, `FAN`, or `BOTH` |
+
 ### 6.4 Commands / Opcodes
 
 The system does not define a custom binary command protocol. The current local
@@ -762,53 +903,68 @@ operation and diagnostics:
 Future production command inputs may additionally be represented by validated
 MQTT set topics and an explicitly enabled OTA firmware upload maintenance
 window over Wi-Fi. Characterization mode remains fully automatic with no
-runtime command input.
+runtime command input. The existing diagnostics output includes OLED detection
+and current display state for Phase 4 bring-up and field support.
 
 ## 7. Operational Procedures
 
 ### Deployment / Flashing
 
-1. Assemble the ESP32, fan power path, tach pull-up, PWM interface, and 1-Wire
-   bus.
+1. Assemble the ESP32, fan power path, tach pull-up, PWM interface, 1-Wire bus,
+   and 3-pin metal circular water-sensor connector.
 2. Verify common ground between the fan supply and ESP32.
 3. Flash the characterization sketch for first article testing.
 4. Record the measured fan curve and minimum stable PWM data.
 5. Integrate measured values into production firmware.
-6. Assign or update the production firmware SemVer version and update
+6. For the OLED feature workstream, development and OTA test builds used
+   version numbers starting at `0.2.1` before the release candidate was
+   promoted to `0.3.0`.
+7. Assign or update the production firmware SemVer version and update
    `CHANGELOG.md` before building a release candidate.
-7. Build production firmware with:
+8. Build production firmware with:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
    ```
 
-8. For normal OTA delivery without USB, flash production firmware with:
+9. For normal OTA delivery without USB, flash production firmware with:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\tools\ota-upload.ps1
    ```
 
-9. Use `tools/mqtt-client.ps1` for normal broker-side MQTT inspection or
+10. Use `tools/mqtt-client.ps1` for normal broker-side MQTT inspection or
    control, and reserve direct `mosquitto_pub.exe` / `mosquitto_sub.exe`
    troubleshooting for raw client debugging only.
-10. Treat `.arduino-build/esp32_esp32_esp32/` as the canonical working build
+11. The optional OLED did not need to be physically connected before the first
+    `0.2.1+` development flashes, provided the display path was implemented as
+    optional and fail-open.
+12. Treat `.arduino-build/esp32_esp32_esp32/` as the canonical working build
     path, including board-scoped `logs/` and `output/`.
-11. Treat `bin/` as the canonical release-artifact directory for versioned
+13. Treat `bin/` as the canonical release-artifact directory for versioned
     firmware BIN files.
-12. Treat `build/` as a bench-side ad-hoc output directory for local serial
+14. Treat `build/` as a bench-side ad-hoc output directory for local serial
     captures and similar temporary artifacts. The sketch-local
     `firmware/controller/build/` directory is an ignored Arduino tooling
     artifact and may be deleted at any time.
 
 ### Provisioning / Configuration
 
-1. Assign the DS18B20 water-sensor role by ROM ID.
-2. Store the default target temperature in NVS.
-3. Validate persisted values at boot.
-4. In production mode, connect to Wi-Fi and MQTT only after local control is
+1. With controller power disconnected, wire the water-sensor connector using
+   the insert-marked contacts: pin 1 = 3.3 V/VCC, pin 2 = GND, and pin 3 =
+   DATA/GPIO33. Keep the 3.3 kOhm DATA pull-up on the controller side.
+2. Verify continuity from the controller-side connector contacts through the
+   mating sensor-side contacts before connecting power.
+3. Assign the DS18B20 water-sensor role by ROM ID.
+4. Store the default target temperature in NVS.
+5. Validate persisted values at boot.
+6. In production mode, connect to Wi-Fi and MQTT only after local control is
    active.
-5. Configure the OTA upload policy before enabling OTA in production. The
+7. Configure the OTA upload policy before enabling OTA in production. The
    initial OTA design shall not require a password or token.
+8. If an OLED is connected, verify its `I2C` wiring on GPIO32/GPIO27 and
+   confirm the normal temperature view only after the core controller bring-up
+   remains stable.
 
 ### Normal Operation
 
@@ -825,7 +981,12 @@ runtime command input.
    validated remote settings when connected.
 8. Publish an immediate extra telemetry snapshot when a documented
    controller-mode, PWM, or fault-policy event state changes.
-9. Keep OTA upload disabled unless an operator explicitly opens the maintenance
+9. If a compatible OLED is available, show `BOOT` during startup, the large
+   water-temperature value during normal operation, or `!` plus a fault label
+   during active alarms.
+10. If no compatible OLED is present, keep the display path disabled with no
+    effect on normal operation.
+11. Keep OTA upload disabled unless an operator explicitly opens the maintenance
    window while local control remains active.
 
 ### Maintenance Procedures
@@ -834,11 +995,15 @@ runtime command input.
 2. Re-run characterization if the installed airflow path changes materially.
 3. Inspect diagnostics for drift between expected and measured RPM.
 4. Verify sensor ROM-ID assignment after replacing a DS18B20 sensor.
-5. Trigger and verify OTA uploads only when the system is in a stable operating
+5. After connector or sensor-cable work, perform an unpowered continuity test
+   of pins 1 through 3 before reconnecting the sensor and powering the system.
+6. Trigger and verify OTA uploads only when the system is in a stable operating
    condition and the local network client is trusted.
-6. Before publishing a firmware release, verify that the firmware version is a
+7. Before publishing a firmware release, verify that the firmware version is a
    valid SemVer value and that `CHANGELOG.md` contains a corresponding Keep a
    Changelog release entry.
+8. Retain basic real OLED hardware-verification evidence when publishing
+   `0.3.0` or later display-related releases.
 
 ### Recovery Procedures
 
@@ -854,6 +1019,9 @@ runtime command input.
    fan-fault boost is currently applied.
 5. On OTA upload or validation failure, remain on the currently working
    firmware and report the failed update state.
+6. If no compatible OLED is detected or the OLED later fails, disable the
+   display path and continue normal controller operation without raising a
+   controller fault solely for the missing display.
 
 ## 8. Verification & Validation
 
@@ -885,8 +1053,22 @@ runtime command input.
 | TC-P2-11 | Control/communication separation | Review module boundaries and disable network stack during runtime tests | Local control remains operational with communication logic absent or inactive |
 | TC-P2-12 | Boot sequencing | Boot with valid persisted config and delayed/unavailable network | Local control becomes valid before network initialization is required |
 | TC-P2-13 | OTA non-blocking startup | Boot with OTA support compiled in and no active OTA maintenance window | Local cooling starts before any OTA upload service is available |
+| TC-P2-14 | Detachable water-sensor connector | With power off, verify continuity across both connector halves for pins 1 through 3, reconnect the sensor, boot, and inspect the recognized ROM ID and temperature | Pin 1 carries 3.3 V/VCC, pin 2 is GND, pin 3 connects DATA to GPIO33, no pins are crossed, and the configured DS18B20 is recognized after reconnection |
 
-### 8.3 Acceptance Tests
+### 8.3 Phase 4 Verification
+
+| Test ID | Feature | Procedure | Success Criteria |
+|---|---|---|---|
+| TC-P4-01 | No OLED connected | Boot a `0.2.1+` display-capable firmware build with no OLED attached | Controller boots normally and local cooling remains fully operational |
+| TC-P4-02 | No-display network/service behavior | Run MQTT, OTA enablement, and fault handling with no OLED attached | MQTT, fault handling, and OTA behavior remain unchanged by the missing display |
+| TC-P4-03 | Display diagnostics without hardware | Inspect serial diagnostics on a no-display boot when display support is compiled in | Diagnostics make it clear that no compatible OLED was detected, if the diagnostics feature is implemented |
+| TC-P4-04 | Boot view on real OLED | Connect the OLED and boot the controller | Display shows `BOOT` before the first stable runtime display state |
+| TC-P4-05 | Normal temperature rendering | Run with a healthy water sensor and connected OLED | Display shows only the large one-decimal water-temperature value |
+| TC-P4-06 | Water fault rendering | Induce a water-sensor fault with connected OLED | Display shows a large `!` plus `WATER` |
+| TC-P4-07 | Fan fault rendering | Induce a fan fault with connected OLED | Display shows a large `!` plus `FAN` |
+| TC-P4-08 | Combined fault rendering and v1 scope limit | Induce a combined fault and inspect steady-state display behavior | Display shows `!` plus `BOTH` and never rotates pages or shows RPM/multi-value content |
+
+### 8.4 Acceptance Tests
 
 | Test ID | Scenario | Procedure | Success Criteria |
 |---|---|---|---|
@@ -901,8 +1083,10 @@ runtime command input.
 | AT-09 | DBLog field profile | Export long-running FHEM/DBLog data with the documented include list, `event-on-change-reading .*`, and `event-min-interval .*:1800` | Core water, fan-state, fault, and availability analysis remains possible without logging high-volume diagnostic detail topics |
 | AT-10 | Release versioning and changelog | Inspect a release candidate before publication | Firmware version follows SemVer 2.0.0 and `CHANGELOG.md` follows Keep a Changelog with a matching release entry |
 | AT-11 | MQTT hybrid cadence | Run production firmware with stable temperatures, then trigger a mode change, a fault-state change, and a valid remote setting update | A full telemetry snapshot is published every 60 seconds during steady state, while the documented controller/fault events and accepted remote settings trigger immediate additional publishes |
+| AT-12 | OTA upgrade without real OLED hardware | OTA-update the installed `0.2.0` controller to a newer `0.2.1+` OLED-capable development build while no OLED is attached | Update succeeds and the controller remains fully operational without the display |
+| AT-13 | Final OLED feature release readiness | Review the completed OLED feature candidate after real display verification | Final release uses version `0.3.0`, has a matching changelog entry, and includes completed real-OLED verification evidence |
 
-### 8.4 Traceability Matrix
+### 8.5 Traceability Matrix
 
 Status interpretation in this matrix:
 
@@ -930,6 +1114,7 @@ Status interpretation in this matrix:
 | FR-2.9 | Must | TC-P2-05, AT-02 | Bench-verified |
 | FR-2.10 | Must | TC-P2-05 | Bench-verified |
 | FR-2.11 | Must | AT-01, AT-02 | Bench-verified |
+| FR-2.12 | Must | TC-P2-14 | Planned |
 | FR-3.1 | Must | TC-P2-07, AT-06 | Bench-verified |
 | FR-3.2 | Must | TC-P2-07, AT-06 | Bench-verified |
 | FR-3.3 | Must | TC-P2-07 | Bench-verified |
@@ -947,6 +1132,16 @@ Status interpretation in this matrix:
 | FR-4.9 | Should | AT-05 | Bench-verified |
 | FR-4.10 | Must | AT-11 | Bench-verified |
 | FR-4.11 | Must | AT-11 | Bench-verified |
+| FR-5.1 | Must | TC-P4-01, TC-P4-04 | Planned |
+| FR-5.2 | Must | TC-P4-05 | Planned |
+| FR-5.3 | Must | TC-P4-04 | Planned |
+| FR-5.4 | Must | TC-P4-06, TC-P4-07, TC-P4-08 | Planned |
+| FR-5.5 | Must | TC-P4-06, TC-P4-07, TC-P4-08 | Planned |
+| FR-5.6 | Must | TC-P4-08 | Planned |
+| FR-5.7 | Must | TC-P4-01, TC-P4-02 | Planned |
+| FR-5.8 | Should | TC-P4-05 | Planned |
+| FR-5.9 | Must | TC-P4-01, TC-P4-02 | Planned |
+| FR-5.10 | Should | TC-P4-03 | Planned |
 | NFR-1.1 | Must | AT-01 | Bench-verified |
 | NFR-1.2 | Must | TC-P2-02, TC-P2-03, AT-06 | Planned |
 | NFR-1.3 | Must | TC-P2-05, AT-02 | Bench-verified |
@@ -959,6 +1154,7 @@ Status interpretation in this matrix:
 | NFR-1.10 | Must | TC-P2-13, AT-01 | Bench-verified |
 | NFR-1.11 | Must | AT-07, AT-08 | Bench-verified |
 | NFR-1.12 | Must | AT-10 | Implemented |
+| NFR-1.12a | Must | AT-12, AT-13 | Planned |
 | NFR-1.13 | Must | AT-10 | Implemented |
 | NFR-1.14 | Should | AT-09, AT-11 | Bench-verified |
 
@@ -969,9 +1165,12 @@ Status interpretation in this matrix:
 | Fan does not start at low PWM | Start threshold too low or PWM interface incompatible | Run characterization and inspect start PWM result | Increase start-boost or validate PWM electrical stage |
 | RPM reads zero while fan spins | Tach wiring or pull-up problem | Check GPIO26 signal, pull-up, and common ground | Correct wiring and confirm pulse measurement |
 | Water temperature seems implausible | Wrong DS18B20 identified as the water sensor | Print detected ROM IDs and compare to the configured water-sensor mapping | Reassign and persist the correct water-sensor ROM ID |
+| Water temperature is unavailable after reconnecting the sensor | Circular connector is unplugged, a contact is loose, or pin numbering was mirrored during wiring | Disconnect power and check continuity against the insert-marked contacts: pin 1 = 3.3 V/VCC, pin 2 = GND, pin 3 = DATA/GPIO33 | Correct both connector halves to the fixed pinout, reconnect while unpowered, and verify the configured sensor ROM after boot |
 | Water remains too warm during hot periods | Low stage is too weak or high stage enters too late | Compare water trend, controller mode, and configured deltas through a full light phase | Increase `fan_low_pwm_percent`, `fan_high_pwm_percent`, or reduce `high_cooling_delta_c` through validated configuration |
 | False fan faults near low PWM | Unstable tach region below stable operating range | Compare measured RPM to stable hold PWM region | Exclude low-PWM region or widen tolerance there |
 | Cooling stops after water sensor issue | Fallback behavior not configured or not applied correctly | Inspect fault logs and safe fallback branch | Implement and verify defined safe fallback PWM |
+| OLED stays dark | OLED is not connected, wired incorrectly, at a different `I2C` address, or intentionally disabled after failed detection | Inspect serial diagnostics, verify `I2C` wiring and power, and confirm that the controller still runs normally without the display | Correct wiring or attach a compatible OLED; no controller-side recovery is required if the display remains optional |
+| OLED always shows `!` | A real water/fan alarm is active or the display is repeatedly re-entering the fault view after a valid alarm | Inspect controller fault diagnostics, `alarm_code`, and sensor/fan health | Resolve the underlying water or fan fault; missing OLED hardware itself is not a controller alarm |
 | MQTT updates seem ignored | Network unavailable or payload invalid | Check broker connection and validation logs | Restore connectivity or send valid payload |
 | FHEM readings do not update | FHEM IODev or topic root does not match the broker traffic | Compare the serial `network` root topic with the FHEM `readingList`; inspect broker traffic for `<root>/status/availability` | Correct the IODev, subscription, credentials, or root topic |
 | OTA upload page is not reachable | OTA maintenance window is not enabled, Wi-Fi is unavailable, or the window timed out | Check Wi-Fi state, OTA state, serial/MQTT diagnostics, and the published `ota_upload_url` | Enable OTA maintenance mode again or restore Wi-Fi connectivity |
@@ -1040,6 +1239,9 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
   categories apply.
 - Each published firmware version shall have a corresponding changelog release
   section with the release date.
+- The OLED feature workstream advanced through `0.2.1+` OTA-testable
+  development builds above the `0.2.0` baseline before promotion to release
+  `0.3.0`.
 
 ### E. Build Artifact Directory Policy
 
@@ -1066,10 +1268,15 @@ Local verified MQTT root topic override on `2026-04-16`: `aquarium_cooling`.
 
 | Signal | Mapping |
 |---|---|
-| Fan PWM | ESP32 GPIO25 -> fan pin 4 (PWM) |
-| Fan TACH | fan pin 3 (TACH) -> ESP32 GPIO26 |
-| Fan Power | fan pin 2 -> +12 V, fan pin 1 -> GND |
-| DS18B20 bus | ESP32 GPIO33 shared 1-Wire bus with 3.3 kOhm pull-up to 3.3 V |
+| Fan pin 1 | Black -> GND |
+| Fan pin 2 | Red -> +12 V fan supply |
+| Fan pin 3 | Yellow -> TACH -> ESP32 GPIO26, with 3.3 kOhm pull-up to 3.3 V |
+| Fan pin 4 | Blue -> PWM -> ESP32 GPIO25 |
+| DS18B20 connector pin 1 | 3.3 V/VCC -> sensor red wire (`rot`) |
+| DS18B20 connector pin 2 | Common GND -> sensor yellow wire (`gelb`) |
+| DS18B20 connector pin 3 | ESP32 GPIO33 DATA -> sensor green wire (`gruen`), with 3.3 kOhm pull-up to 3.3 V on the controller side |
+| OLED SDA (optional) | ESP32 GPIO32 -> OLED SDA |
+| OLED SCL (optional) | ESP32 GPIO27 -> OLED SCL |
 
 ### G. Verified Fan Characterization Result
 
@@ -1121,6 +1328,9 @@ FanCurvePoint curve[] = {
 - Final hardware implementation of PWM electrical compatibility
 - Whether installed airflow requires a separate in-situ fan curve
 - Exact OTA upload window duration and final service-policy details
+- Rework the 3-pin water-sensor circular-connector documentation after
+  checking the real plug and socket; add a correct, clearly oriented photo
+  showing contact numbers, plug/socket side, and the final verified wiring
 
 ### I. Draft Schematic Sketch
 

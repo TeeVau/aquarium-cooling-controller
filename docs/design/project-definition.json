@@ -56,6 +56,12 @@
         "TACH",
         "PWM"
       ],
+      "installed_connector_pinout": {
+        "1": "black / GND",
+        "2": "red / +12 V",
+        "3": "yellow / TACH / ESP32 GPIO26 with 3.3 kOhm pull-up to 3.3 V",
+        "4": "blue / PWM / ESP32 GPIO25"
+      },
       "tach_characteristic_assumption": "2 pulses per revolution",
       "selection_rationale": [
         "Low-noise operation",
@@ -71,6 +77,17 @@
         "water_temperature"
       ],
       "wiring_model": "Shared 1-Wire bus",
+      "connector": {
+        "type": "3-pin metal circular connector",
+        "pinout": {
+          "1": "3.3 V / VCC",
+          "2": "GND",
+          "3": "DATA / ESP32 GPIO33"
+        },
+        "shell": "unconnected",
+        "assembly_rule": "Use the contact numbers marked on each connector insert; do not infer numbering from mirrored plug and socket views",
+        "documentation_status": "Open: recheck the real plug and socket, then revise the connector documentation and add a correct, clearly oriented photo showing contact numbers and viewing side"
+      },
       "assignment_rule": "Sensors must be identified by ROM ID, not by bus order",
       "reason": [
         "Stable role assignment across reboot and hardware changes",
@@ -392,11 +409,11 @@
     ]
   },
   "codex_tasking": {
-    "current_task": "Observe and tune released firmware 0.1.4 with water-only control, broker-driven OTA endpoint discovery, and validated OTA on the installed controller hardware",
+    "current_task": "Prepare release 0.3.0 with optional non-critical OLED status display, broker-driven OTA, and updated project documentation",
     "next_expected_tasks": [
-        "Collect longer live aquarium data for the water-only strategy",
-        "Review FHEM/DB logging completeness for later analysis",
-        "Finalize enclosure and wiring for the installed system"
+        "Publish the 0.3.0 release and corresponding firmware artifact",
+        "Run extended field observation with the released OLED-enabled firmware",
+        "Refine any remaining mechanical enclosure details around the installed wiring"
     ],
     "instructions_for_codex": [
       "Preserve the architectural rule that critical temperature control runs locally on the ESP32",
@@ -420,7 +437,8 @@
       "Target temperature survives reboot",
       "Fan plausibility fault is detected using curve + tolerance",
       "MQTT can observe current state without compromising autonomy",
-        "MQTT can set selected non-critical parameters only through validated and persisted update paths"
+      "MQTT can set selected non-critical parameters only through validated and persisted update paths",
+      "Optional OLED status display shows local temperature and fault indication without becoming a controller dependency"
     ]
   },
   "known_open_points": [
@@ -430,7 +448,7 @@
   ],
   "non_goals_for_now": [
     "Heating control",
-    "Local display UI",
+    "Complex local display UI beyond the single-status OLED view",
     "Local button input",
     "Complex cloud integration",
     "Using MQTT during fan characterization testing"

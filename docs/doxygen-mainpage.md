@@ -17,15 +17,17 @@ This Doxygen site focuses on source-level API documentation.
 - RPM monitor: interrupt-driven tachometer pulse counting.
 - Fault monitor and policy: fan plausibility, alarm state, severity, and response.
 - Sensor manager: OneWire discovery and DS18B20 water-temperature sampling.
+- OLED status display: optional local boot, temperature, and fault rendering.
 - MQTT telemetry: network status, controller-state publishing, and validated
   remote configuration for control parameters.
 - Controller sketch: Arduino setup/loop orchestration, serial diagnostics, target
-  persistence, OTA upload plumbing, and module wiring.
+  persistence, OTA upload plumbing, OLED integration, and module wiring.
 
 ## Circuit Summary
 
 - ESP32 board running the Arduino core.
 - DS18B20 water sensor on the shared OneWire bus.
+- Optional `0.91"` monochrome `128x32` `I2C` OLED on GPIO32 / GPIO27.
 - Four-wire PWM fan with separate PWM command and tachometer feedback.
 - MQTT telemetry is optional; local cooling continues without Wi-Fi or broker access.
 - MQTT can update target temperature, hysteresis deltas, and fixed low/high PWM
